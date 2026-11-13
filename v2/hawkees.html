@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Hawkees V2 · Attaques</title>
+<style>
+  html,body{margin:0;height:100%;overflow:hidden;background:#151a3a;font-family:system-ui,sans-serif;color:#fff}
+  canvas{display:block}
+  h1{position:fixed;left:0;right:0;top:10px;margin:0;text-align:center;font-size:clamp(18px,3vw,30px);letter-spacing:3px;color:#ffb347;text-shadow:0 2px 4px #000;pointer-events:none}
+  .lab{position:fixed;transform:translateX(-50%);width:40vw;text-align:center;font-size:clamp(11px,1.6vw,15px);text-shadow:0 1px 3px #000;pointer-events:none}
+  .lab b{display:block;font-size:1.1em;color:#ffb347}
+  #help{position:fixed;left:0;right:0;bottom:8px;text-align:center;font-size:12px;color:#ccd;padding:0 16px}
+  #back{position:fixed;right:16px;top:12px;color:#aab;font-size:12px}
+  #styles{position:fixed;left:0;right:0;top:50px;display:flex;flex-wrap:wrap;gap:6px;justify-content:center;padding:0 16px}
+  #styles button{font:inherit;font-size:13px;color:#fff;background:#2a3166;border:1px solid #4a52a0;border-radius:6px;padding:5px 10px;cursor:pointer}
+  #styles button.on{background:#ff8a1f;border-color:#ffb347;color:#1a0a05}
+</style>
+<script src="models/ual1.js"></script>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
+</head><body>
+<h1>HAWKEES · FEU</h1>
+<div id="help">Kit V1 : combo enflammé · boule de feu perçante · éruption · coup chargé · vol · forme PHÉNIX (power-up) · Espace : pause</div>
+<a id="back" href="../index.html">← Menu</a>
+<div id="styles"></div>
+<script type="module">
+import * as THREE from 'three';
+import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
+import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
+import {OutlineEffect} from 'three/addons/effects/OutlineEffect.js';
+
+const renderer=new THREE.WebGLRenderer({antialias:true,preserveDrawingBuffer:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.shadowMap.enabled=true;document.body.prepend(renderer.domElement);
+const outline=new OutlineEffect(renderer,{defaultThickness:.006});
+const scene=new THREE.Scene();scene.background=new THREE.Color('#1d2452');
+const cam=new THREE.OrthographicCamera(-1,1,1,-1,-50,100),VIEW=3.3;
+cam.position.set(6,4.4,6);cam.lookAt(0,1.1,0);
+function resize(){const a=innerWidth/innerHeight,v=Math.max(VIEW,4.6/a);Object.assign(cam,{left:-v*a,right:v*a,top:v,bottom:-v});cam.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight)}
+addEventListener('resize',resize);resize();
+scene.add(new THREE.HemisphereLight('#c8d4ff','#3a3050',1.2));
+const sun=new THREE.DirectionalLight('#fff4dd',2.4);sun.position.set(4,10,7);sun.castShadow=true;sun.shadow.mapSize.set(2048,2048);Object.assign(sun.shadow.camera,{left:-7,right:7,top:7,bottom:-7});scene.add(sun);
+const grad=new THREE.DataTexture(new Uint8Array([90,90,90,255,175,175,175,255,255,255,255,255]),3,1);grad.minFilter=grad.magFilter=THREE.NearestFilter;grad.needsUpdate=true;
+const toon=(color,o={})=>new THREE.MeshToonMaterial({color,gradientMap:grad,...o});
+const noInk=m=>(m.userData.outlineParameters={visible:false},m);
+const SKIN='#e0ac7e',rnd=(a=1)=>(Math.random()-.5)*2*a,V3=()=>new THREE.Vector3();
+// chosen look (2026-11-13): "Aviateur"
+const LOOK={jacket:'#6b3f22',tee:'#e8e4da',pants:'#3b4a63',boots:'#4a2f1c',hair:'#3a2414'};
+const FIRE=['#fff2a0','#ffd040','#ff8a1f','#ff8a1f','#e0301a'],fcol=()=>FIRE[Math.random()*FIRE.length|0];
+
+const gl=await new Promise((ok,ko)=>new GLTFLoader().parse(Uint8Array.from(atob(window.UAL1),c=>c.charCodeAt(0)).buffer,'',ok,ko));
+const clips=Object.fromEntries(gl.animations.map(a=>[a.name,a]));
+
+function paintClothes(m,L){ // vertex colours from the dominant bone + rest-pose position
+  m.updateMatrixWorld(true);const meshes=[];m.traverse(o=>{if(o.isSkinnedMesh)meshes.push(o)});
+  const hipsY=m.getObjectByName('DEF-hips').getWorldPosition(V3()).y,c=new THREE.Color(),v=V3(),head=new THREE.Box3();
+  const H0=m.getObjectByName('DEF-head').getWorldPosition(V3()).y/1.6*1.8; // approx. full height
+  for(const mesh of meshes){const geo=mesh.geometry=mesh.geometry.clone(),si=geo.attributes.skinIndex,sw=geo.attributes.skinWeight,bones=mesh.skeleton.bones,n=geo.attributes.position.count,col=new Float32Array(n*3);
+    for(let i=0;i<n;i++){let b=0,w=-1;for(let k=0;k<4;k++){const ww=sw.getComponent(i,k);if(ww>w){w=ww;b=si.getComponent(i,k)}}
+      const name=bones[b].name;mesh.getVertexPosition(i,v);v.applyMatrix4(mesh.matrixWorld);
+      let t;
+      if(/-(head|neck|hand|f_|thumb)/.test(name)){t=SKIN;if(name==='DEF-head')head.expandByPoint(v)}
+      else if(/foot|toe|heel/i.test(name)||(/shin/i.test(name)&&v.y<H0*.14))t=L.boots;
+      else if(/thigh|shin/i.test(name)||(/hips/i.test(name)&&v.y<hipsY+H0*.03))t=L.pants;
+      else if(/spine|hips|breast|pelvis/i.test(name)&&v.z>0&&Math.abs(v.x)<H0*.05)t=L.tee; // open jacket: tee shows down the front
+      else t=L.jacket;
+      c.set(t);col.set([c.r,c.g,c.b],i*3)}
+    geo.setAttribute('color',new THREE.BufferAttribute(col,3));mesh.material=toon('#ffffff',{vertexColors:true});mesh.castShadow=true;mesh.frustumCulled=false}
+  const hs=head.getSize(V3()),hc=head.getCenter(V3());
+  const hair=new THREE.Mesh(new THREE.SphereGeometry(.5,18,12,0,Math.PI*2,0,Math.PI*.55),toon(L.hair));hair.scale.set(hs.x*1.12,hs.y*.9,hs.z*1.15);
+  hair.position.set(hc.x,hc.y+hs.y*.08,hc.z-hs.z*.06);hair.rotation.x=-.25;scene.add(hair);m.getObjectByName('DEF-head').attach(hair);
+}
+
+const stage=new THREE.Mesh(new THREE.CylinderGeometry(6.5,6.7,.2,48),toon('#3a4170'));stage.position.y=-.1;stage.receiveShadow=true;scene.add(stage);
+
+// ---- fire particles: additive points that rise (negative gravity)
+const dot=(()=>{const c=document.createElement('canvas');c.width=c.height=32;const g=c.getContext('2d'),r=g.createRadialGradient(16,16,0,16,16,16);
+  r.addColorStop(0,'rgba(255,255,255,1)');r.addColorStop(.4,'rgba(255,255,255,.6)');r.addColorStop(1,'rgba(255,255,255,0)');g.fillStyle=r;g.fillRect(0,0,32,32);return new THREE.CanvasTexture(c)})();
+// comic flame tongue: red / orange / yellow bands with a black ink edge
+const tongue=(()=>{const c=document.createElement('canvas');c.width=c.height=64;const g=c.getContext('2d');
+  const drop=(s,col,ink)=>{g.save();g.translate(32,40);g.scale(s,s);g.beginPath();g.moveTo(0,-34);g.bezierCurveTo(10,-14,20,-4,18,8);g.arc(0,8,18,0,Math.PI);g.bezierCurveTo(-20,-4,-10,-14,0,-34);g.restore();
+    g.fillStyle=col;g.fill();if(ink){g.lineWidth=5;g.strokeStyle='#1a0a05';g.stroke()}};
+  drop(1,'#e0301a',1);drop(.68,'#ff8a1f');drop(.38,'#ffe14d');return new THREE.CanvasTexture(c)})();
+const NP=2500,pgeo=new THREE.BufferGeometry();pgeo.setAttribute('position',new THREE.BufferAttribute(new Float32Array(NP*3),3));
+pgeo.setAttribute('color',new THREE.BufferAttribute(new Float32Array(NP*4),4));pgeo.setAttribute('size',new THREE.BufferAttribute(new Float32Array(NP),1));
+const PR=renderer.getPixelRatio(),c0=new THREE.Color(),c1=new THREE.Color();
+const ptMat=(map,add)=>noInk(new THREE.ShaderMaterial({uniforms:{map:{value:map},useMap:{value:map?1:0},cut:{value:add?0:.5}},transparent:add,depthWrite:!add,blending:add?THREE.AdditiveBlending:THREE.NormalBlending,
+  vertexShader:'attribute float size;attribute vec4 color;varying vec4 vC;void main(){vC=color;gl_PointSize=size;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}',
+  fragmentShader:'uniform sampler2D map;uniform float useMap;uniform float cut;varying vec4 vC;void main(){vec4 t=useMap>.5?texture2D(map,vec2(gl_PointCoord.x,1.-gl_PointCoord.y)):vec4(1.);vec4 o=t*vC;if(t.a<cut)discard;gl_FragColor=o;}'}));
+const step3=(k,a,b,c)=>k>.66?a:k>.33?b:c;
+// each style: material + size and colour over the particle's life (k: 1 = born, 0 = dead)
+const STYLES=[
+  {name:'Étincelles',mat:ptMat(dot,1),size:()=>16,col:(p,k)=>(c0.copy(p.col).multiplyScalar(k),1)},
+  {name:'Cartoon (cerné)',mat:ptMat(tongue,0),size:k=>34*Math.sqrt(k),col:(p,k)=>(c0.set('#ffffff').lerp(c1.set('#ff7050'),1-k),1)},
+  {name:'Flammes douces',mat:ptMat(dot,1),size:k=>12+38*(1-k),col:(p,k)=>(c0.set(step3(k,'#fff2a0','#ff8a1f','#a02010')).multiplyScalar(.55*k),1)},
+  {name:'Pixel (rétro V1)',mat:ptMat(null,0),size:k=>k>.5?12:8,col:(p,k)=>(c0.set(step3(k,'#ffff33','#ff9900','#ff4400')),1)}];
+let style=0;const pts=new THREE.Points(pgeo,STYLES[0].mat);pts.frustumCulled=false;scene.add(pts);
+const pick=i=>{style=i;pts.material=STYLES[i].mat;document.querySelectorAll('#styles button').forEach((b,j)=>b.classList.toggle('on',j===i))};
+const parts=Array.from({length:NP},()=>({life:0,pos:V3(),vel:V3(),col:new THREE.Color()}));let pi=0;
+function emit(p0,vel,life,col=fcol()){const p=parts[pi=(pi+1)%NP];p.pos.copy(p0);p.vel.copy(vel);p.life=p.max=life;p.col.set(col)}
+const jitter=a=>new THREE.Vector3(rnd(a),rnd(a),rnd(a));
+
+// ---- heroes: same Aviateur, the right one in PHÉNIX form (aura + stronger flames)
+const RIGHT=new THREE.Vector3(1,0,-1).normalize(),DEPTH=new THREE.Vector3(1,0,1).normalize();
+const ry=Math.PI*.75-.45,FWD=new THREE.Vector3(Math.sin(ry),0,Math.cos(ry));
+const bonePos=(h,n)=>h.bones[n].getWorldPosition(V3());
+const fwdHand=h=>{const l=bonePos(h,'DEF-handL'),r=bonePos(h,'DEF-handR');return l.dot(FWD)>r.dot(FWD)?l:r};
+const balls=[];
+function jet(h,n){const a=fwdHand(h);for(let j=0;j<n*h.k;j++)emit(a,FWD.clone().multiplyScalar(4+Math.random()*3).add(jitter(.5)),.18+Math.random()*.12)} // short flame jet = extra melee reach
+function fireball(h){const a=fwdHand(h),r=.1*h.k,m=new THREE.Mesh(new THREE.SphereGeometry(r,14,10),noInk(new THREE.MeshBasicMaterial({color:'#fff2a0'})));
+  m.position.copy(a);scene.add(m);balls.push({m,h,vel:FWD.clone().multiplyScalar(6),life:1.1,r})}
+const MOVES=[
+  {n:'Combo 1 · jab enflammé',c:'Punch_Jab',d:.75,f:(h,t)=>t>.15&&t<.32&&jet(h,3)},
+  {n:'Combo 2 · direct enflammé',c:'Punch_Cross',d:.85,f:(h,t)=>t>.2&&t<.4&&jet(h,4)},
+  {n:'Combo 3 · revers de flammes',c:'Sword_Attack',d:1.2,f:(h,t)=>{if(t>.3&&t<.75){const a=fwdHand(h);for(let j=0;j<3*h.k;j++)emit(a,jitter(.6).add(V3().set(0,.6,0)),.35+Math.random()*.2)}}},
+  {n:'Spécial 1 · boule de feu perçante',c:'Spell_Simple_Shoot',d:1.1,f:(h,t,dt)=>{if(t>=.18&&t-dt<.18)fireball(h);if(t<.18){const a=fwdHand(h);emit(a,jitter(.4),.2)}}},
+  {n:'Spécial 2 · éruption (piliers de feu)',c:'Spell_Simple_Enter',d:1.5,f:(h,t)=>{for(let k=0;k<3;k++){const t0=.35+k*.18;if(t>t0&&t<t0+.45){const b=h.m.position.clone().addScaledVector(FWD,1.1+k*.8);
+    for(let j=0;j<5*h.k;j++)emit(b.clone().add(V3().set(rnd(.18),0,rnd(.18))),V3().set(rnd(.3),3.5+Math.random()*3,rnd(.3)),.4+Math.random()*.25)}}}},
+  {n:'Coup chargé · écrasement',c:'Jump_Land',d:1.2,y:t=>t<.4?Math.sin(t/.4*Math.PI)*.9:0,f:(h,t,dt)=>{if(t<.4){const a=fwdHand(h);emit(a,jitter(.3),.2)}
+    if(t>=.4&&t-dt<.4)for(let j=0;j<90*h.k;j++){const a=j/(90*h.k)*Math.PI*2;emit(h.m.position.clone().setY(.05),V3().set(Math.cos(a)*4,.8+Math.random(),Math.sin(a)*4),.45)}}},
+  {n:'Vol (saut maintenu)',c:'Jump_Loop',d:2.2,y:t=>Math.min(t*2.5,1,(2.2-t)*2.5)*1.1,f:h=>{for(const n of ['DEF-footL','DEF-footR']){const a=bonePos(h,n);for(let j=0;j<2*h.k;j++)emit(a,V3().set(rnd(.3),-2.5-Math.random()*2,rnd(.3)),.25)}}},
+  {n:'Repos',c:'Idle_Loop',d:1.2}];
+const heroes=[{name:'Hawkees',k:1,pos:RIGHT.clone().multiplyScalar(-2.2).addScaledVector(DEPTH,-2.4)},{name:'Hawkees · PHÉNIX (power-up)',k:1.8,phoenix:1,pos:RIGHT.clone().multiplyScalar(-2.2).addScaledVector(DEPTH,2.2)}].map((h,i)=>{
+  const m=SkeletonUtils.clone(gl.scene);scene.add(m);paintClothes(m,LOOK);
+  const hy=m.getObjectByName('DEF-head').getWorldPosition(V3()).y;m.scale.setScalar(1.55/hy);m.position.copy(h.pos);m.rotation.y=ry;
+  const bones={};m.traverse(o=>{if(o.isBone)bones[o.name]=o});
+  const lab=document.createElement('div');lab.className='lab';document.body.append(lab);
+  const light=new THREE.PointLight('#ff8a1f',0,2.5);scene.add(light);
+  return {...h,m,bones,lab,light,mixer:new THREE.AnimationMixer(m),k:h.k,i:i*3%MOVES.length,t:0,act:null};
+});
+const auraBones=Object.keys(heroes[0].bones).filter(n=>/head|neck|spine|upper_arm|forearm|hand|thigh|shin|hips/.test(n)&&!/f_|thumb/.test(n));
+function start(h){const M=h.mv=MOVES[h.i],c=clips[M.c],a=h.mixer.clipAction(c),loop=/Loop/.test(M.c);a.reset();a.setLoop(loop?THREE.LoopRepeat:THREE.LoopOnce);a.clampWhenFinished=true;
+  if(h.act&&h.act!==a)h.act.crossFadeTo(a,.12,false);a.play();h.act=a;h.t=0;h.lab.innerHTML=`<b>${h.name}</b>${M.n}`}
+heroes.forEach(start);
+function tick(dt){
+  for(const h of heroes){h.mixer.update(dt);h.t+=dt;const M=h.mv;
+    h.m.position.y=M.y?M.y(h.t):0;h.m.updateMatrixWorld(true);M.f?.(h,h.t,dt);
+    if(h.phoenix){for(let j=0;j<9;j++){const a=bonePos(h,auraBones[Math.random()*auraBones.length|0]).add(jitter(.08));emit(a,V3().set(rnd(.3),1.2+Math.random()*1.6,rnd(.3)),.35+Math.random()*.3)} // PHÉNIX aura: flames licking up the body
+      h.light.position.copy(h.m.position).setY(h.m.position.y+1);h.light.intensity=.8+Math.random()*.5}
+    else{h.light.position.copy(fwdHand(h));h.light.intensity=M.f&&h.t<M.d*.6&&h.i<6?.6:0}
+    if(h.t>=M.d){h.i=(h.i+1)%MOVES.length;start(h)}}
+  for(let i=balls.length-1;i>=0;i--){const b=balls[i];b.life-=dt;b.m.position.addScaledVector(b.vel,dt);b.m.scale.setScalar(1+.15*Math.sin(b.life*40));
+    for(let j=0;j<8*b.h.k;j++)emit(b.m.position.clone().add(jitter(b.r*1.6)),jitter(.5).addScaledVector(b.vel,-.2),.25+Math.random()*.15);
+    if(b.life<=0){for(let j=0;j<30*b.h.k;j++)emit(b.m.position,jitter(3),.4);scene.remove(b.m);balls.splice(i,1)}}
+  const A=pgeo.attributes,S=STYLES[style];parts.forEach((p,i)=>{if(p.life>0){p.life-=dt;p.vel.y+=2*dt;p.vel.multiplyScalar(1-2*dt);p.pos.addScaledVector(p.vel,dt)}const k=p.life>0?p.life/p.max:0;
+    if(k<=0){A.position.setXYZ(i,0,-99,0);A.size.setX(i,0);return}
+    A.position.setXYZ(i,p.pos.x,p.pos.y,p.pos.z);A.size.setX(i,S.size(k)*PR);const a=S.col(p,k);A.color.setXYZW(i,c0.r,c0.g,c0.b,a)});
+  A.position.needsUpdate=A.color.needsUpdate=A.size.needsUpdate=true}
+const bar=document.getElementById('styles');STYLES.forEach((s,i)=>{const b=document.createElement('button');b.textContent=`${i+1}. ${s.name}`;b.onclick=()=>pick(i);bar.append(b)});pick(2); // chosen 2026-11-13: "Flammes douces"
+let paused=false;addEventListener('keydown',e=>{if(e.key===' ')paused=!paused;if(STYLES[e.key-1])pick(e.key-1)});
+const clock=new THREE.Clock(),v=V3();
+window.__look={heroes,step:tick,render:()=>outline.render(scene,cam),MOVES,start};
+(function frame(){requestAnimationFrame(frame);const dt=Math.min(clock.getDelta(),.05);if(!paused)tick(dt);
+  for(const h of heroes){v.copy(h.m.position);v.y=-.2;v.project(cam);Object.assign(h.lab.style,{left:(v.x+1)/2*innerWidth+'px',top:(1-v.y)/2*innerHeight+'px'})}
+  outline.render(scene,cam)})();
+</script>
+</body></html>

@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Phantom V2 · Attaques</title>
+<style>
+  html,body{margin:0;height:100%;overflow:hidden;background:#151a3a;font-family:system-ui,sans-serif;color:#fff}
+  canvas{display:block}
+  h1{position:fixed;left:0;right:0;top:10px;margin:0;text-align:center;font-size:clamp(18px,3vw,30px);letter-spacing:3px;color:#c9a9ff;text-shadow:0 2px 4px #000;pointer-events:none}
+  .lab{position:fixed;transform:translateX(-50%);width:40vw;text-align:center;font-size:clamp(11px,1.6vw,15px);text-shadow:0 1px 3px #000;pointer-events:none}
+  .lab b{display:block;font-size:1.1em;color:#c9a9ff}
+  #help{position:fixed;left:0;right:0;bottom:8px;text-align:center;font-size:12px;color:#ccd;padding:0 16px}
+  #back{position:fixed;right:16px;top:12px;color:#aab;font-size:12px}
+</style>
+<script src="models/ual1.js"></script>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
+</head><body>
+<h1>PHANTOM · SABRES</h1>
+<div id="help">Kit V1 : combo · tempête de lames · pas de l’ombre · croix chargée · parade (renvoie les tirs) · super vitesse · forme OMBRE (power-up) · Espace : pause</div>
+<a id="back" href="../index.html">← Menu</a>
+<script type="module">
+import * as THREE from 'three';
+import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
+import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
+import {OutlineEffect} from 'three/addons/effects/OutlineEffect.js';
+
+const renderer=new THREE.WebGLRenderer({antialias:true,preserveDrawingBuffer:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.shadowMap.enabled=true;document.body.prepend(renderer.domElement);
+const outline=new OutlineEffect(renderer,{defaultThickness:.006});
+const scene=new THREE.Scene();scene.background=new THREE.Color('#1d2452');
+const cam=new THREE.OrthographicCamera(-1,1,1,-1,-50,100),VIEW=3.3;
+cam.position.set(6,4.4,6);cam.lookAt(0,1.1,0);
+function resize(){const a=innerWidth/innerHeight,v=Math.max(VIEW,4.8/a);Object.assign(cam,{left:-v*a,right:v*a,top:v,bottom:-v});cam.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight)}
+addEventListener('resize',resize);resize();
+scene.add(new THREE.HemisphereLight('#c8d4ff','#3a3050',1.2));
+const sun=new THREE.DirectionalLight('#fff4dd',2.4);sun.position.set(4,10,7);sun.castShadow=true;sun.shadow.mapSize.set(2048,2048);Object.assign(sun.shadow.camera,{left:-7,right:7,top:7,bottom:-7});scene.add(sun);
+const grad=new THREE.DataTexture(new Uint8Array([90,90,90,255,175,175,175,255,255,255,255,255]),3,1);grad.minFilter=grad.magFilter=THREE.NearestFilter;grad.needsUpdate=true;
+const toon=(color,o={})=>new THREE.MeshToonMaterial({color,gradientMap:grad,...o});
+const noInk=m=>(m.userData.outlineParameters={visible:false},m);
+const rnd=(a=1)=>(Math.random()-.5)*2*a,V3=()=>new THREE.Vector3(),UP=new THREE.Vector3(0,1,0);
+// chosen look (2026-11-13): "Spectre très svelte"
+const LOOK={suit:'#15121c',joints:'#a070ff',slim:.66};
+const VIO='#a070ff',LAV='#e8dcff',SMOKE=['#2a1840','#4a2a70','#6a3a9a'],pick=a=>a[Math.random()*a.length|0];
+
+const gl=await new Promise((ok,ko)=>new GLTFLoader().parse(Uint8Array.from(atob(window.UAL1),c=>c.charCodeAt(0)).buffer,'',ok,ko));
+const clips=Object.fromEntries(gl.animations.map(a=>[a.name,a]));
+
+// slim build: pull each bind-pose vertex toward its dominant bone's axis (bones untouched, so rig and props keep working)
+const SLIMK=[[/spine|hips/,1],[/shoulder/,1.4],[/upper_arm|forearm/,1.05],[/thigh|shin/,1]];
+const domBone=(si,sw,i)=>{let b=0,w=-1;for(let k=0;k<4;k++){const ww=sw.getComponent(i,k);if(ww>w){w=ww;b=si.getComponent(i,k)}}return b};
+function slim(mesh,f){const geo=mesh.geometry,si=geo.attributes.skinIndex,sw=geo.attributes.skinWeight,bones=mesh.skeleton.bones,inv=mesh.matrixWorld.clone().invert(),pos=geo.attributes.position,v=V3(),d=V3(),q=V3();
+  const ax=bones.map(b=>{const wk=SLIMK.find(([r])=>r.test(b.name))?.[1],k=wk?Math.min(1,1-(1-f)/wk):1,c=b.children.find(o=>o.isBone);const a=b.getWorldPosition(V3()).applyMatrix4(inv);return {k,a,d:c?c.getWorldPosition(V3()).applyMatrix4(inv).sub(a):V3()}});
+  for(let i=0;i<pos.count;i++){const A=ax[domBone(si,sw,i)];if(A.k===1)continue;v.fromBufferAttribute(pos,i);const L2=A.d.lengthSq(),t=L2?Math.min(1,Math.max(0,d.subVectors(v,A.a).dot(A.d)/L2)):0;
+    q.copy(A.a).addScaledVector(A.d,t);v.sub(q).multiplyScalar(A.k).add(q);pos.setXYZ(i,v.x,v.y,v.z)}
+  geo.computeVertexNormals()}
+function sabre(m,bone){ // shortcut: grip hand-tuned like thunder.html, retune if the rig changes
+  const S=m.scale.x,g=new THREE.Group(),len=.85;
+  const blade=new THREE.Mesh(new THREE.BoxGeometry(.03,len,.01),noInk(new THREE.MeshBasicMaterial({color:LAV})));blade.position.y=.1+len/2;
+  const glow=new THREE.Mesh(new THREE.BoxGeometry(.07,len+.04,.045),noInk(new THREE.MeshBasicMaterial({color:VIO,transparent:true,opacity:.45,blending:THREE.AdditiveBlending,depthWrite:false})));glow.position.y=blade.position.y;
+  const guard=new THREE.Mesh(new THREE.BoxGeometry(.12,.025,.05),toon('#2a2d3a')),grip=new THREE.Mesh(new THREE.BoxGeometry(.03,.16,.03),toon('#1a1024'));guard.position.y=.08;
+  const tip=new THREE.Object3D();tip.position.y=.1+len;g.add(blade,glow,guard,grip,tip);
+  m.getObjectByName(bone).add(g);g.scale.setScalar(1/S);g.rotation.set(Math.PI/2,0,0);g.position.set(0,.09/S,0);return tip}
+function build(){
+  const m=SkeletonUtils.clone(gl.scene);scene.add(m);m.updateMatrixWorld(true);const head=new THREE.Box3(),v=V3();
+  m.traverse(o=>{if(!o.isSkinnedMesh)return;o.castShadow=true;o.frustumCulled=false;o.geometry=o.geometry.clone();
+    o.material=o.name==='Mannequin_2'?toon(LOOK.joints,{emissive:LOOK.joints,emissiveIntensity:.5}):toon(LOOK.suit);
+    const g=o.geometry;for(let i=0;i<g.attributes.position.count;i++)if(o.skeleton.bones[domBone(g.attributes.skinIndex,g.attributes.skinWeight,i)].name==='DEF-head'){o.getVertexPosition(i,v);head.expandByPoint(v.applyMatrix4(o.matrixWorld))}
+    slim(o,LOOK.slim)});
+  const hs=head.getSize(V3()),hc=head.getCenter(V3()),visor=new THREE.Mesh(new THREE.BoxGeometry(hs.x*.95,hs.y*.16,hs.z*.3),toon(LOOK.joints,{emissive:LOOK.joints,emissiveIntensity:.6}));
+  visor.position.set(hc.x,hc.y+hs.y*.05,hc.z+hs.z*.42);scene.add(visor);m.getObjectByName('DEF-head').attach(visor);
+  m.scale.setScalar(1.55/m.getObjectByName('DEF-head').getWorldPosition(V3()).y);m.updateMatrixWorld(true);
+  return {m,tips:[sabre(m,'DEF-handR'),sabre(m,'DEF-handL')]}}
+
+const stage=new THREE.Mesh(new THREE.CylinderGeometry(6.5,6.7,.2,48),toon('#3a4170'));stage.position.y=-.1;stage.receiveShadow=true;scene.add(stage);
+
+// ---- particles: glow (additive) and shadow smoke (normal blend); size and alpha over life
+const dot=(()=>{const c=document.createElement('canvas');c.width=c.height=32;const g=c.getContext('2d'),r=g.createRadialGradient(16,16,0,16,16,16);
+  r.addColorStop(0,'rgba(255,255,255,1)');r.addColorStop(.4,'rgba(255,255,255,.6)');r.addColorStop(1,'rgba(255,255,255,0)');g.fillStyle=r;g.fillRect(0,0,32,32);return new THREE.CanvasTexture(c)})();
+const PR=renderer.getPixelRatio();
+function system(N,add){
+  const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.BufferAttribute(new Float32Array(N*3),3));geo.setAttribute('color',new THREE.BufferAttribute(new Float32Array(N*4),4));geo.setAttribute('size',new THREE.BufferAttribute(new Float32Array(N),1));
+  const pts=new THREE.Points(geo,noInk(new THREE.ShaderMaterial({uniforms:{map:{value:dot}},transparent:true,depthWrite:false,blending:add?THREE.AdditiveBlending:THREE.NormalBlending,
+    vertexShader:'attribute float size;attribute vec4 color;varying vec4 vC;void main(){vC=color;gl_PointSize=size;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}',
+    fragmentShader:'uniform sampler2D map;varying vec4 vC;void main(){gl_FragColor=vec4(vC.rgb,vC.a*texture2D(map,gl_PointCoord).a);}'})));
+  pts.frustumCulled=false;pts.renderOrder=add?2:1;scene.add(pts);
+  const P=Array.from({length:N},()=>({life:0,pos:V3(),vel:V3(),col:new THREE.Color()}));let i0=0;
+  return {emit(p0,vel,life,col,s0,s1,rise=0){const p=P[i0=(i0+1)%N];p.pos.copy(p0);p.vel.copy(vel);p.life=p.max=life;p.col.set(col);p.s0=s0;p.s1=s1;p.rise=rise},
+    update(dt){const A=geo.attributes;P.forEach((p,i)=>{if(p.life>0){p.life-=dt;p.vel.y+=p.rise*dt;p.vel.multiplyScalar(1-2*dt);p.pos.addScaledVector(p.vel,dt)}const k=p.life>0?p.life/p.max:0;
+      if(k<=0){A.size.setX(i,0);return}A.position.setXYZ(i,p.pos.x,p.pos.y,p.pos.z);A.size.setX(i,(p.s1+(p.s0-p.s1)*k)*PR);A.color.setXYZW(i,p.col.r,p.col.g,p.col.b,add?k:k*.75)});
+      A.position.needsUpdate=A.color.needsUpdate=A.size.needsUpdate=true}}}
+const glow=system(2000,1),smoke=system(1500,0);
+const puff=(p,n=20)=>{for(let j=0;j<n;j++)smoke.emit(p.clone().add(V3().set(rnd(.25),Math.random()*1.6,rnd(.25))),V3().set(rnd(.8),rnd(.4),rnd(.8)),.5+Math.random()*.3,pick(SMOKE),16,40,.6)};
+
+// ---- slash shapes: arcs and bars that flash and fade
+const flashes=[];
+const flashMat=c=>noInk(new THREE.MeshBasicMaterial({color:c,transparent:true,blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide}));
+function flash(mesh,life){scene.add(mesh);flashes.push({mesh,life,max:life})}
+function ring(c,normal,r,col,life=.2,ts=0,tl=Math.PI*2){const m=new THREE.Mesh(new THREE.RingGeometry(r*.88,r,40,1,ts,tl),flashMat(col));m.position.copy(c);m.lookAt(c.clone().add(normal));flash(m,life)}
+const RIGHT=new THREE.Vector3(1,0,-1).normalize(),DEPTH=new THREE.Vector3(1,0,1).normalize();
+const ry=Math.PI*.75-.45,FWD=new THREE.Vector3(Math.sin(ry),0,Math.cos(ry)),SIDE=FWD.clone().cross(UP),BASIS=new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(FWD,UP,SIDE));
+function cross(c){for(const [a,col] of [[.8,'#ffffff'],[-.8,LAV]]){const g=new THREE.Group(),b=new THREE.Mesh(new THREE.BoxGeometry(1.8,.06,.02),flashMat(col));b.rotation.z=a;g.add(b);g.position.copy(c);g.quaternion.copy(BASIS);flash(g,.35)}}
+
+// ---- moves (V1 kit); f(h,t,dt) runs every frame, off(t) slides the hero forward
+const trail=(a,b)=>(h,t)=>{if(t>a&&t<b)h.tips.forEach((tp,i)=>{const p=tp.getWorldPosition(V3()),pv=h.prev[i];for(let j=0;j<8;j++)glow.emit(pv.clone().lerp(p,j/8),V3(),.3,j%3?VIO:'#ffffff',14*h.k,8)})};
+const MOVES=[
+  {n:'Combo 1 · estoc',c:'Punch_Jab',d:.7,f:trail(.12,.4)},
+  {n:'Combo 2 · estoc croisé',c:'Punch_Cross',d:.75,f:trail(.18,.45)},
+  {n:'Combo 3 · taille',c:'Sword_Attack',d:1.2,f:trail(.35,.85)},
+  {n:'Spécial 1 · tempête de lames',c:'Sword_Attack',ts:2.4,loop:1,d:1.4,f:(h,t,dt)=>{trail(0,9)(h,t);if((t%.12)<dt*h.ts){const c=h.m.position.clone().setY(.8+Math.random()*.6);ring(c,UP.clone().add(V3().set(rnd(.3),0,rnd(.3))),.95*h.k,Math.random()<.5?'#ffffff':VIO,.18)}}},
+  {n:'Spécial 2 · pas de l’ombre (ruée)',c:'Sprint_Loop',d:.8,off:t=>Math.min(1,Math.max(0,(t-.1)/.22))*2.6,f:(h,t)=>{if(t>.08&&t<.34){const p=h.m.position;for(let j=0;j<5*h.k;j++)smoke.emit(p.clone().add(V3().set(rnd(.2),Math.random()*1.5,rnd(.2))),V3(),.45,pick(SMOKE),20,34)}}},
+  {n:'Coup chargé · croix',c:'Sword_Attack',d:1.2,off:t=>Math.min(1,t/.3)*1.1,f:(h,t,dt)=>{trail(.3,.7)(h,t);if(t>=.45&&t-dt*h.ts<.45){const c=h.m.position.clone().addScaledVector(FWD,.9).setY(1.05);cross(c);if(h.k>1)setTimeout(()=>cross(c),90)}}},
+  {n:'Parade · renvoie les tirs',c:'Spell_Simple_Idle_Loop',d:1.3,f:(h,t)=>{const b=h.bullet,p=h.m.position;b.visible=t<1.1;
+    if(t<.5){b.position.copy(p).addScaledVector(FWD,3.4-6*t).setY(1.2);b.material.color.set('#ff5a3a')}
+    else{if(!h.parried){h.parried=1;ring(p.clone().addScaledVector(FWD,.45).setY(1.2),FWD,.45,VIO,.3);ring(p.clone().addScaledVector(FWD,.45).setY(1.2),FWD,.3,'#ffffff',.3)}
+      b.position.copy(p).addScaledVector(FWD,.4+8*(t-.5)).setY(1.2);b.material.color.set(VIO)}
+    glow.emit(b.position,V3(),.15,b.material.color,12,4)}},
+  {n:'Super vitesse',c:'Sprint_Loop',d:1.1,off:t=>t*3.4,f:h=>{const p=h.m.position;for(let j=0;j<3;j++)glow.emit(p.clone().add(V3().set(rnd(.2),.3+Math.random()*1.2,rnd(.2))),FWD.clone().multiplyScalar(-4),.2,VIO,10,4)}},
+  {n:'Repos',c:'Sword_Idle',d:1}];
+
+// ---- heroes: normal and OMBRE (faster, shadow aura, 3 echoes that replay each move a beat later)
+const LAG=[.09,.18,.27],ghostMat=a=>noInk(new THREE.MeshBasicMaterial({color:VIO,transparent:true,opacity:a,depthWrite:false}));
+const heroes=[{name:'Phantom',k:1,ts:1,base:RIGHT.clone().multiplyScalar(-2.4).addScaledVector(DEPTH,-2.4)},{name:'Phantom · OMBRE (power-up)',k:1.5,ts:1.25,ombre:1,base:RIGHT.clone().multiplyScalar(-2.4).addScaledVector(DEPTH,2.2)}].map((h,i)=>{
+  const {m,tips}=build();m.position.copy(h.base);m.rotation.y=ry;
+  const lab=document.createElement('div');lab.className='lab';document.body.append(lab);
+  const bullet=new THREE.Mesh(new THREE.SphereGeometry(.08,10,8),noInk(new THREE.MeshBasicMaterial({color:'#ff5a3a'})));bullet.visible=false;scene.add(bullet);
+  const H={...h,m,tips,lab,bullet,prev:tips.map(t=>t.getWorldPosition(V3())),mixer:new THREE.AnimationMixer(m),i:i*4%MOVES.length,t:0,now:0,hist:[],ghosts:[],bones:[]};
+  m.traverse(o=>{if(o.isBone&&/spine|upper_arm|forearm|thigh|shin|head/.test(o.name))H.bones.push(o)});
+  if(h.ombre)H.ghosts=LAG.map((lag,j)=>{const g=SkeletonUtils.clone(m);g.traverse(o=>{if(o.isMesh){o.material=ghostMat(.32-j*.08);o.castShadow=false}});scene.add(g);return {g,lag,mixer:new THREE.AnimationMixer(g),q:[]}});
+  return H});
+function play(mixer,M,prev){const a=mixer.clipAction(clips[M.c]);a.reset();a.timeScale=M.ts||1;a.setLoop(M.loop||/Loop|Idle/.test(M.c)?THREE.LoopRepeat:THREE.LoopOnce);a.clampWhenFinished=true;
+  if(prev&&prev!==a)prev.crossFadeTo(a,.1,false);a.play();return a}
+function start(h){const M=h.mv=MOVES[h.i];if(h.off>.5){puff(h.m.position);puff(h.base)} // shadow-step back to the start mark
+  h.off=0;h.t=0;h.parried=0;h.tips.forEach(t=>t.parent.visible=M.c!=='Sprint_Loop'); // shortcut: sabres hidden while sprinting (the run swings them through the body), a back sheath is the real fix
+  h.act=play(h.mixer,M,h.act);h.lab.innerHTML=`<b>${h.name}</b>${M.n}`;h.ghosts.forEach(g=>g.q.push({at:h.now+g.lag,M}))}
+heroes.forEach(start);
+function tick(dt){
+  for(const h of heroes){const d=dt*h.ts;h.now+=dt;h.mixer.update(d);h.t+=d;const M=h.mv;
+    h.off=M.off?M.off(h.t):0;h.m.position.copy(h.base).addScaledVector(FWD,h.off);h.m.updateMatrixWorld(true);
+    M.f?.(h,h.t,dt);h.tips.forEach((t,i)=>t.getWorldPosition(h.prev[i]));
+    if(h.ombre){h.hist.push({at:h.now,p:h.m.position.clone()});while(h.hist.length&&h.hist[0].at<h.now-.4)h.hist.shift();
+      for(let j=0;j<3;j++){const p=h.bones[Math.random()*h.bones.length|0].getWorldPosition(V3()).add(V3().set(rnd(.1),rnd(.1),rnd(.1)));smoke.emit(p,V3().set(rnd(.15),.5+Math.random()*.6,rnd(.15)),.5+Math.random()*.3,pick(SMOKE),14,30)} // OMBRE aura: shadow smoke
+      if(Math.random()<.3)glow.emit(h.bones[Math.random()*h.bones.length|0].getWorldPosition(V3()),V3().set(0,.6,0),.4,LAV,8,2);
+      for(const g of h.ghosts){while(g.q.length&&g.q[0].at<=h.now){g.act=play(g.mixer,g.q.shift().M,g.act)}g.mixer.update(d);
+        const s=h.hist.findLast(e=>e.at<=h.now-g.lag)||h.hist[0];g.g.position.copy(s.p);g.g.rotation.y=ry}}
+    if(h.t>=M.d){h.i=(h.i+1)%MOVES.length;start(h)}}
+  for(let i=flashes.length-1;i>=0;i--){const f=flashes[i];f.life-=dt;const k=Math.max(0,f.life/f.max);f.mesh.traverse(o=>{if(o.material)o.material.opacity=k});f.mesh.scale.setScalar(1+(1-k)*.25);if(f.life<=0){scene.remove(f.mesh);flashes.splice(i,1)}}
+  glow.update(dt);smoke.update(dt)}
+let paused=false;addEventListener('keydown',e=>{if(e.key===' ')paused=!paused});
+const clock=new THREE.Clock(),v=V3();
+window.__look={heroes,step:tick,render:()=>outline.render(scene,cam),MOVES,start};
+(function frame(){requestAnimationFrame(frame);const dt=Math.min(clock.getDelta(),.05);if(!paused)tick(dt);
+  for(const h of heroes){v.copy(h.base);v.y=-.2;v.project(cam);Object.assign(h.lab.style,{left:(v.x+1)/2*innerWidth+'px',top:(1-v.y)/2*innerHeight+'px'})}
+  outline.render(scene,cam)})();
+</script>
+</body></html>

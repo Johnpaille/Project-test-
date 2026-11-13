@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Thunderstruck V2 · Accessoires</title>
+<style>
+  html,body{margin:0;height:100%;overflow:hidden;background:#151a3a;font-family:system-ui,sans-serif;color:#fff}
+  canvas{display:block}
+  h1{position:fixed;left:0;right:0;top:10px;margin:0;text-align:center;font-size:clamp(18px,3vw,30px);letter-spacing:3px;color:#ffe14d;text-shadow:0 2px 4px #000;pointer-events:none}
+  .lab{position:fixed;transform:translateX(-50%);width:16vw;text-align:center;font-size:clamp(10px,1.5vw,13px);text-shadow:0 1px 3px #000;pointer-events:none}
+  .lab b{display:block;font-size:1.15em;color:#3ef0ff}
+  #help{position:fixed;left:0;right:0;bottom:8px;text-align:center;font-size:12px;color:#ccd;padding:0 16px}
+  #back{position:fixed;right:16px;top:12px;color:#aab;font-size:12px}
+</style>
+<script src="models/ual1.js"></script>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
+</head><body>
+<h1>THUNDERSTRUCK · ACCESSOIRES</h1>
+<div id="help">Modèle Athlétique + animations : Quaternius UAL (CC0) · costume Tempête · Espace : pause</div>
+<a id="back" href="../index.html">← Menu</a>
+<script type="module">
+import * as THREE from 'three';
+import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
+import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
+import {OutlineEffect} from 'three/addons/effects/OutlineEffect.js';
+
+const renderer=new THREE.WebGLRenderer({antialias:true,preserveDrawingBuffer:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.shadowMap.enabled=true;document.body.prepend(renderer.domElement);
+const outline=new OutlineEffect(renderer,{defaultThickness:.006});
+const scene=new THREE.Scene();scene.background=new THREE.Color('#1d2452');
+const cam=new THREE.OrthographicCamera(-1,1,1,-1,-50,100),VIEW=1.4;
+cam.position.set(6,4.4,6);cam.lookAt(0,.9,0);
+function resize(){const a=innerWidth/innerHeight,v=Math.max(VIEW,4.3/a);Object.assign(cam,{left:-v*a,right:v*a,top:v,bottom:-v});cam.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight)}
+addEventListener('resize',resize);resize();
+scene.add(new THREE.HemisphereLight('#c8d4ff','#3a3050',1.1));
+const sun=new THREE.DirectionalLight('#fff4dd',2.2);sun.position.set(4,10,7);sun.castShadow=true;sun.shadow.mapSize.set(2048,2048);Object.assign(sun.shadow.camera,{left:-7,right:7,top:7,bottom:-7});scene.add(sun);
+const grad=new THREE.DataTexture(new Uint8Array([90,90,90,255,175,175,175,255,255,255,255,255]),3,1);grad.minFilter=grad.magFilter=THREE.NearestFilter;grad.needsUpdate=true;
+const toon=(color,o={})=>new THREE.MeshToonMaterial({color,gradientMap:grad,...o});
+const noInk=m=>(m.userData.outlineParameters={visible:false},m);
+const CYAN='#3ef0ff',FIRE='#ff8a1f',rnd=(a=1)=>(Math.random()-.5)*2*a;
+
+const VARIANTS=[
+  {name:'Cape',desc:'tissu qui flotte et suit les mouvements',cape:1},
+  {name:'Lame d’énergie',desc:'épée lumineuse dans la main droite',sword:1},
+  {name:'Aura électrique',desc:'Thunderstruck en power-up : arcs sur le corps',aura:1},
+  {name:'Mains de feu',desc:'flammes aux mains, boule de feu',fire:1},
+  {name:'Tout ensemble',desc:'cape + lame + aura',cape:1,sword:1,aura:1,sparks:1}];
+const SEQ=[['Idle_Loop',1.6],['Punch_Jab',.55],['Punch_Cross',.7],['Spell_Simple_Shoot',1.1,1],['Sword_Attack',1],['Roll',1],['Jump_Start',.4],['Jump_Land',.6]];
+
+const gltf=await new Promise((ok,ko)=>new GLTFLoader().parse(Uint8Array.from(atob(window.UAL1),c=>c.charCodeAt(0)).buffer,'',ok,ko));
+const clips=Object.fromEntries(gltf.animations.map(a=>[a.name,a]));
+gltf.scene.updateMatrixWorld(true);const S=1.6/gltf.scene.getObjectByName('DEF-head').getWorldPosition(new THREE.Vector3()).y;
+const stage=new THREE.Mesh(new THREE.CylinderGeometry(5,5.2,.2,48),toon('#3a4170'));stage.position.y=-.1;stage.receiveShadow=true;scene.add(stage);
+
+// soft round particle sprite shared by fire and sparks
+const dot=(()=>{const c=document.createElement('canvas');c.width=c.height=32;const g=c.getContext('2d'),r=g.createRadialGradient(16,16,0,16,16,16);
+  r.addColorStop(0,'rgba(255,255,255,1)');r.addColorStop(.4,'rgba(255,255,255,.6)');r.addColorStop(1,'rgba(255,255,255,0)');g.fillStyle=r;g.fillRect(0,0,32,32);return new THREE.CanvasTexture(c)})();
+function particles(n){const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.BufferAttribute(new Float32Array(n*3),3));geo.setAttribute('color',new THREE.BufferAttribute(new Float32Array(n*3),3));
+  const pts=new THREE.Points(geo,noInk(new THREE.PointsMaterial({size:14*renderer.getPixelRatio(),sizeAttenuation:false,map:dot,vertexColors:true,transparent:true,depthWrite:false,blending:THREE.AdditiveBlending})));pts.frustumCulled=false;scene.add(pts);
+  return {pts,list:Array.from({length:n},()=>({life:0}))}}
+function emit(P,pos,vel,life,col){const p=P.list.find(q=>q.life<=0);if(!p)return;p.pos=pos.clone();p.vel=vel;p.life=p.max=life;p.col=new THREE.Color(col)}
+function stepParticles(P,dt,rise){const a=P.pts.geometry.attributes;
+  P.list.forEach((p,i)=>{if(p.life>0){p.life-=dt;p.vel.y+=rise*dt;p.pos.addScaledVector(p.vel,dt)}const k=p.life>0?p.life/p.max:0;
+    if(k>0)a.position.setXYZ(i,p.pos.x,p.pos.y,p.pos.z);else a.position.setXYZ(i,0,-99,0);a.color.setXYZ(i,p.col?p.col.r*k:0,p.col?p.col.g*k:0,p.col?p.col.b*k:0)});
+  a.position.needsUpdate=a.color.needsUpdate=true}
+const zigzag=(a,b,n,j)=>{const pts=[a];for(let i=1;i<n;i++)pts.push(a.clone().lerp(b,i/n).add(new THREE.Vector3(rnd(j),rnd(j),rnd(j))));pts.push(b);return pts};
+const arcMat=noInk(new THREE.MeshBasicMaterial({color:CYAN}));
+
+const RIGHT=new THREE.Vector3(1,0,-1).normalize();
+const heroes=VARIANTS.map((V,i)=>{
+  const ry=Math.PI/4+(V.cape?2.55:.75),FWD=new THREE.Vector3(Math.sin(ry),0,Math.cos(ry)); // cape wearers turned so the back shows
+  const m=SkeletonUtils.clone(gltf.scene);m.scale.setScalar(S);m.position.copy(RIGHT).multiplyScalar((i-2)*1.6);m.rotation.y=ry;scene.add(m);
+  m.traverse(o=>{if(o.isMesh){o.castShadow=true;o.frustumCulled=false;o.material=o.material.name==='M_Joints'?toon(CYAN,{emissive:CYAN,emissiveIntensity:.35}):toon('#1b1d2a')}});
+  m.updateMatrixWorld(true);
+  const B=n=>m.getObjectByName(n),wp=n=>B(n).getWorldPosition(new THREE.Vector3()); // three strips dots from bone names
+  const stick=(mesh,b,pos)=>{mesh.position.copy(pos);mesh.lookAt(pos.clone().add(FWD));scene.add(mesh);B(b).attach(mesh)};
+  const s=new THREE.Shape([[0,.11],[-.05,0],[0,0],[-.03,-.11],[.06,.02],[.01,.02],[.04,.11]].map(p=>new THREE.Vector2(...p)));
+  stick(new THREE.Mesh(new THREE.ExtrudeGeometry(s,{depth:.02,bevelEnabled:false}),toon(CYAN,{emissive:CYAN,emissiveIntensity:.35})),'DEF-spine003',wp('DEF-spine003').addScaledVector(FWD,.13).add(new THREE.Vector3(0,.02,0)));
+  stick(new THREE.Mesh(new THREE.BoxGeometry(.2,.05,.06),toon('#0e1a22')),'DEF-head',wp('DEF-head').addScaledVector(FWD,.1).add(new THREE.Vector3(0,.09,0)));
+  const h={V,m,B,wp,FWD,mixer:new THREE.AnimationMixer(m),k:i%SEQ.length,t:0,act:null,light:new THREE.PointLight(V.fire?FIRE:CYAN,0,3)};scene.add(h.light);
+  if(V.cape){ // verlet cloth: top row pinned under the shoulders, the rest falls with gravity and is pushed off the back
+    const W=5,R=9,mesh=new THREE.Mesh(new THREE.PlaneGeometry(1,1,W-1,R-1),toon('#2b3160',{side:THREE.DoubleSide}));mesh.castShadow=true;mesh.frustumCulled=false;scene.add(mesh);
+    h.cape={mesh,W,R,pts:[],old:[],seg:.13};for(let r=0;r<R;r++)for(let c=0;c<W;c++){const p=new THREE.Vector3(m.position.x,1.5-r*.12,m.position.z);h.cape.pts.push(p);h.cape.old.push(p.clone())}}
+  if(V.sword){const g=new THREE.Group(),blade=new THREE.Mesh(new THREE.BoxGeometry(.035,.95,.012),noInk(new THREE.MeshBasicMaterial({color:'#bff8ff'})));
+    const glow=new THREE.Mesh(new THREE.BoxGeometry(.08,1,.05),noInk(new THREE.MeshBasicMaterial({color:CYAN,transparent:true,opacity:.45,blending:THREE.AdditiveBlending,depthWrite:false})));
+    const hilt=new THREE.Mesh(new THREE.BoxGeometry(.18,.04,.05),toon('#2a2d3a'));blade.position.y=glow.position.y=.55;g.add(blade,glow,hilt);
+    // shortcut: hand-tuned grip for the UAL rig, retune if the model changes
+    B('DEF-handR').add(g);g.scale.setScalar(1/S);g.rotation.set(Math.PI/2,0,0);g.position.set(0,.09/S,0);h.sword=g}
+  if(V.sparks||V.fire)h.parts=particles(200);
+  const lab=document.createElement('div');lab.className='lab';lab.innerHTML=`<b>${V.name}</b>${V.desc}`;document.body.append(lab);h.lab=lab;
+  return h;
+});
+
+const bolts=[];
+function boltFrom(h){const a=h.wp('DEF-handL'),FWD=h.FWD;
+  if(h.V.fire){for(let j=0;j<40;j++)emit(h.parts,a,FWD.clone().multiplyScalar(4+Math.random()*2).add(new THREE.Vector3(rnd(.5),rnd(.5),rnd(.5))),.5,j%2?'#ffd040':FIRE)}
+  else{const mesh=new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(zigzag(a,a.clone().addScaledVector(FWD,2.8),9,.14),false,'catmullrom',0),48,.03,5),arcMat);scene.add(mesh);bolts.push({mesh,t:.25})}
+  h.light.position.copy(a);h.light.intensity=6}
+function next(h){const [n,d,fx]=SEQ[h.k],a=h.mixer.clipAction(clips[n]);a.reset();a.setLoop(n.endsWith('Loop')?THREE.LoopRepeat:THREE.LoopOnce);a.clampWhenFinished=true;
+  if(h.act&&h.act!==a)h.act.crossFadeTo(a,.15,false);a.play();h.act=a;h.t=d;h.fx=fx;h.fxDone=false;h.k=(h.k+1)%SEQ.length}
+heroes.forEach(next);
+
+const UP=new THREE.Vector3(0,1,0),G=new THREE.Vector3();
+const D=new THREE.Vector3();
+function relax(a,b,rest,aPinned){D.subVectors(b,a);const len=D.length()||1,k=(len-rest)/len;if(aPinned)b.addScaledVector(D,-k);else{a.addScaledVector(D,k/2);b.addScaledVector(D,-k/2)}}
+function stepCape(h,dt){const C=h.cape,{W,R,pts,old}=C,L=h.wp('DEF-upper_armL'),Rr=h.wp('DEF-upper_armR');
+  const across=Rr.clone().sub(L),back=across.clone().cross(UP).normalize();if(back.dot(h.FWD)>0)back.negate(); // points behind the torso
+  for(let c=0;c<W;c++){const p=L.clone().lerp(Rr,-.25+1.5*c/(W-1)).addScaledVector(back,.1);p.y+=.04;pts[c].copy(p);old[c].copy(p)}
+  G.set(0,-9.8*dt*dt,0);
+  for(let i=W;i<pts.length;i++){const p=pts[i],vel=p.clone().sub(old[i]).multiplyScalar(.96);old[i].copy(p);p.add(vel).add(G)}
+  const want=across.length()*1.6/(W-1),hips=h.wp('DEF-hips'),ch=h.wp('DEF-spine003');
+  for(let it=0;it<8;it++){
+    for(let r=0;r<R;r++)for(let c=0;c<W;c++){const i=r*W+c; // distance constraints, pinned top row never moves
+      if(r>0)relax(pts[i-W],pts[i],C.seg,r===1);if(c>0&&r>0)relax(pts[i-1],pts[i],want,false)}
+    for(let i=W;i<pts.length;i++){const p=pts[i],ref=p.y>hips.y?ch:hips,d=p.clone().sub(ref).dot(back);if(d<.13)p.addScaledVector(back,.13-d)}} // keep it off the body
+  const pos=C.mesh.geometry.attributes.position;pts.forEach((p,i)=>pos.setXYZ(i,p.x,p.y,p.z));pos.needsUpdate=true;C.mesh.geometry.computeVertexNormals()}
+const AURA=['DEF-head','DEF-spine003','DEF-hips','DEF-handL','DEF-handR','DEF-shinL','DEF-shinR','DEF-upper_armL','DEF-upper_armR'];
+function stepFx(h,dt){
+  if(h.cape)stepCape(h,dt);
+  if(h.parts){for(const hand of['DEF-handL','DEF-handR'])for(let j=0;j<(h.V.fire?3:1);j++){const p=h.wp(hand).add(new THREE.Vector3(rnd(.05),rnd(.05),rnd(.05)));
+      if(h.V.fire)emit(h.parts,p,new THREE.Vector3(rnd(.15),.4+Math.random()*.5,rnd(.15)),.35+Math.random()*.25,Math.random()<.4?'#ffd040':Math.random()<.5?FIRE:'#e0301a');
+      else if(Math.random()<.5)emit(h.parts,p,new THREE.Vector3(rnd(1.2),rnd(1.2),rnd(1.2)),.15,'#bff8ff')}
+    stepParticles(h.parts,dt,h.V.fire?1.2:0)}
+  if(h.V.aura&&Math.random()<.35){ // short-lived arcs jumping between random body points
+    const a=h.wp(AURA[Math.random()*AURA.length|0]).add(new THREE.Vector3(rnd(.12),rnd(.12),rnd(.12))),b=a.clone().add(new THREE.Vector3(rnd(.35),rnd(.35),rnd(.35)));
+    const mesh=new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(zigzag(a,b,5,.05),false,'catmullrom',0),16,.012,4),arcMat);scene.add(mesh);bolts.push({mesh,t:.08});
+    h.light.position.copy(a);h.light.intensity=Math.max(h.light.intensity,1.5)}
+  if(h.V.fire){h.light.position.copy(h.wp('DEF-handR'));h.light.intensity=Math.max(h.light.intensity,1.2+Math.random()*.6)}
+}
+function tick(dt){
+  for(const h of heroes){h.mixer.update(dt);h.t-=dt;if(h.fx&&!h.fxDone&&h.t<.7){h.fxDone=true;boltFrom(h)}h.light.intensity*=.85;stepFx(h,dt);if(h.t<=0)next(h)}
+  for(let i=bolts.length-1;i>=0;i--){const b=bolts[i];b.t-=dt;if(b.t<=0){scene.remove(b.mesh);b.mesh.geometry.dispose();bolts.splice(i,1)}}
+}
+let paused=false;addEventListener('keydown',e=>{if(e.key===' ')paused=!paused});
+const clock=new THREE.Clock(),v=new THREE.Vector3();
+window.__look={heroes,clips,step:tick,render:()=>outline.render(scene,cam)};
+(function frame(){requestAnimationFrame(frame);const dt=Math.min(clock.getDelta(),.05);if(!paused)tick(dt);
+  for(const h of heroes){v.copy(h.m.position);v.y=-.15;v.project(cam);Object.assign(h.lab.style,{left:(v.x+1)/2*innerWidth+'px',top:(1-v.y)/2*innerHeight+'px'})}
+  outline.render(scene,cam)})();
+</script>
+</body></html>
