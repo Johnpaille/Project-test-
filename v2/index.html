@@ -13,6 +13,11 @@
   #msg h1{margin:0;font-size:clamp(28px,6vw,56px);color:#ffe14d}
   #help{position:fixed;left:0;right:0;bottom:8px;text-align:center;font-size:12px;color:#ccd;text-shadow:0 1px 2px #000;pointer-events:none;padding:0 16px}
   #back{position:fixed;right:16px;bottom:8px;color:#aab;font-size:12px}
+  #touch{position:fixed;inset:0;pointer-events:none;display:none;-webkit-user-select:none;-webkit-touch-callout:none}
+  #touch div{pointer-events:auto;touch-action:none;position:absolute;border-radius:50%;background:rgba(255,255,255,.12);border:2px solid rgba(255,255,255,.35);
+    color:rgba(255,255,255,.85);font:bold 11px system-ui,sans-serif;display:flex;align-items:center;justify-content:center;width:58px;height:58px}
+  #touch div:active{background:rgba(255,255,255,.3)}
+  body.touch #help,body.touch #back{display:none}
   #load{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;font-size:18px;background:#0a0820}
 </style>
 <script src="models/ual1.js"></script>
@@ -21,6 +26,17 @@
 <div id="hud"><b>THUNDERSTRUCK</b> <span id="pow" style="color:#3ef0ff;font-weight:bold"></span><div class="bar" id="hp"><i style="width:100%"></i></div><div class="bar" id="en"><i style="width:0"></i></div></div>
 <div id="boss" style="position:fixed;left:50%;top:12px;width:min(320px,60vw);transform:translateX(-50%);display:none;text-align:center;text-shadow:0 1px 2px #000"><b style="color:#a99cff;letter-spacing:2px">INDIGO</b><div class="bar"><i style="width:100%;background:#7a6cff"></i></div></div><div id="wave"></div><div id="msg"></div>
 <div id="help">ZQSD/flèches : bouger (2× : sprint) · J : frapper (maintenir : coup chargé) · K/Espace : sauter · L : tempête · M : poings chargés · H maintenu : charger l'énergie (pleine + 1 s : power-up) · G : invisible · F/Maj : garde (+direction : téléport) · contre un robot : saisie (J, J+dir, K, G) · manette OK · Échap : menu</div>
+<div id="touch"><!-- shown on first touch; each button holds the keyboard key of BIND -->
+  <div id="stick" style="left:18px;bottom:18px;width:130px;height:130px">◀ ▲ ▼ ▶</div>
+  <div data-k="j" style="right:84px;bottom:16px;width:66px;height:66px">FRAPPE</div>
+  <div data-k="k" style="right:14px;bottom:66px">SAUT</div>
+  <div data-k="f" style="right:160px;bottom:16px">GARDE</div>
+  <div data-k="l" style="right:160px;bottom:88px">TEMPÊTE</div>
+  <div data-k="m" style="right:88px;bottom:94px">POINGS</div>
+  <div data-k="h" style="right:14px;bottom:138px">CHARGE</div>
+  <div data-k="g" style="right:88px;bottom:166px">INVISIBLE</div>
+  <div data-k="escape" style="right:16px;top:40px;width:60px;height:30px;border-radius:8px">MENU</div>
+</div>
 <a id="back" href="../index.html">← Menu</a>
 <div id="load">Chargement des modèles 3D…</div>
 <script type="module">
@@ -41,7 +57,8 @@ document.body.prepend(renderer.domElement);
 const outline=new OutlineEffect(renderer,{defaultThickness:.006,defaultColor:[0,0,0]});
 const scene=new THREE.Scene();scene.background=new THREE.Color('#25306a');scene.fog=new THREE.Fog('#25306a',60,110);
 const cam=new THREE.OrthographicCamera(-1,1,1,-1,-100,300);const CAM_OFF=new THREE.Vector3(18,15,18);
-function resize(){const a=innerWidth/innerHeight;Object.assign(cam,{left:-VIEW*a,right:VIEW*a,top:VIEW,bottom:-VIEW});cam.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight)}
+// portrait: zoom out to keep the width
+function resize(){const a=innerWidth/innerHeight,v=VIEW*Math.max(1,.9/a);Object.assign(cam,{left:-v*a,right:v*a,top:v,bottom:-v});cam.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight)}
 addEventListener('resize',resize);resize();
 scene.add(new THREE.HemisphereLight('#c8d4ff','#3a3050',1.1));
 const sun=new THREE.DirectionalLight('#fff4dd',2.2);sun.position.set(8,20,6);sun.castShadow=true;sun.shadow.mapSize.set(2048,2048);
@@ -184,6 +201,17 @@ function pollInput(){for(const a in BIND)pad[a]=false;
     const ax=g.axes[0]||0,ay=g.axes[1]||0;pad.left=ax<-.4||b(14);pad.right=ax>.4||b(15);pad.up=ay<-.4||b(12);pad.down=ay>.4||b(13)}
   for(const a in BIND){const h=held(a);pressedNow[a]=h&&!prev[a];prev[a]=h}}
 const pressed=a=>pressedNow[a];
+// touch controls: virtual stick + buttons hold the same keys as the keyboard (double tap the stick = sprint)
+{const TOUCH=document.getElementById('touch'),stick=document.getElementById('stick'),vkey=(k,on)=>{keys[k]=on};
+  addEventListener('touchstart',()=>{TOUCH.style.display='block';document.body.classList.add('touch')},{once:true});
+  for(const b of TOUCH.querySelectorAll('[data-k]')){const k=b.dataset.k;
+    b.addEventListener('pointerdown',e=>{e.preventDefault();b.setPointerCapture(e.pointerId);vkey(k,true)});
+    for(const ev of['pointerup','pointercancel'])b.addEventListener(ev,()=>vkey(k,false))}
+  let sx=0,sy=0;const moveStick=e=>{const dx=e.clientX-sx,dy=e.clientY-sy,d=16;vkey('arrowleft',dx<-d);vkey('arrowright',dx>d);vkey('arrowup',dy<-d);vkey('arrowdown',dy>d)};
+  stick.addEventListener('pointerdown',e=>{e.preventDefault();stick.setPointerCapture(e.pointerId);const r=stick.getBoundingClientRect();sx=r.left+r.width/2;sy=r.top+r.height/2;moveStick(e)});
+  stick.addEventListener('pointermove',e=>{if(e.buttons||e.pointerType==='touch')moveStick(e)});
+  for(const ev of['pointerup','pointercancel'])stick.addEventListener(ev,()=>{for(const k of['arrowleft','arrowright','arrowup','arrowdown'])vkey(k,false)});
+  renderer.domElement.addEventListener('pointerdown',e=>{if(e.pointerType!=='mouse'&&(over||P.hp<=0))location.reload()})} // tap to replay
 // screen-relative directions for the isometric camera
 const RIGHT=new THREE.Vector3(1,0,-1).normalize(),UP=new THREE.Vector3(-1,0,-1).normalize();
 
