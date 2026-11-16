@@ -41,6 +41,8 @@ Héros jouables : Thunderstruck (foudre, cyan), Hawkees (feu, orange), Phantom (
 
 **Danger** : les flaques d'eau, électrifiables par Thunderstruck ou par un câble arraché.
 
+**Fait (prototype `v2/rue.html`)** : 4 zones (avenue, ruelle, chantier, cour de l’entrepôt), voyous, punks et brute (mannequin peint), poubelles qui soignent, bidons à lancer, flaques que la foudre électrise, vapeur des égouts, The Beast en 2 phases (charges, onde de choc, barricade de conteneurs défoncée). Reste : câble arraché, scène de fin, enchaînement avec le niveau suivant.
+
 **Boss, The Beast** :
 - Phase 1 : il charge en ligne droite, et rate sa charge s'il percute un mur.
 - Phase 2 (Beast 2), enragé : il défonce le mur de l'entrepôt, l'arène s'agrandit, et ses charges rebondissent.
