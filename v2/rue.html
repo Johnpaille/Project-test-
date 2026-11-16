@@ -12,7 +12,7 @@ import * as THREE from 'three';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 import {OutlineEffect} from 'three/addons/effects/OutlineEffect.js';
-const {DT,rand,scene,hemi,sun,toon,S2,toUW,fromUW,WD,LV,noInk,glowM,fieldM,lb,lc,ual,HEADY,makeChar,play,flash,CYAN,P,H,robots,fx,spark,bolt,glow,fxMesh,kill,hurtRobot,hurtPlayer,alive,unflash,keep,msg,G,UB,start,aura,handArc,say,fade}=await MBEngine({THREE,GLTFLoader,SkeletonUtils,OutlineEffect});
+const {DT,rand,clamp,scene,hemi,sun,toon,S2,toUW,fromUW,WD,LV,noInk,glowM,fieldM,lb,lc,ual,HEADY,makeChar,play,flash,CYAN,P,H,robots,fx,spark,bolt,glow,fxMesh,kill,hurtRobot,hurtPlayer,alive,unflash,keep,msg,G,UB,start,aura,handArc,say,fade,startCine,dress,bulk,spawnGang,metroCar,V3,makeDeadeye,aimLaser}=await MBEngine({THREE,GLTFLoader,SkeletonUtils,OutlineEffect});
 
 // night: darker sky and moonlight
 scene.background.set('#0b1030');scene.fog.color.set('#0b1030');scene.fog.near=50;scene.fog.far=100;hemi.color.set('#7a88d8');hemi.groundColor.set('#1a1430');hemi.intensity=.9;sun.color.set('#b8c8ff');sun.intensity=1.3;
@@ -21,7 +21,7 @@ const ZONES=[
   {u0:0,u1:26,name:'AVENUE',hint:'J : combo · F : garde (au dernier moment : parade)',wave:[[14,-3,'v'],[18,3,'v']]},
   {u0:26,u1:52,name:'RUELLE',hint:'Ils arrivent des deux côtés · Casse les poubelles : soin',wave:[[16,-3,'v'],[20,2,'p'],[1.5,3,'v'],[2,-3,'p']]},
   {u0:52,u1:78,name:'CHANTIER',hint:'Frappe un bidon pour le lancer · La foudre électrise les flaques',wave:[[16,0,'b'],[12,-4,'p'],[20,4,'p'],[2,0,'v']]},
-  {u0:78,u1:96,name:'ENTREPÔG.T HAZARD',hint:'The Beast fonce tout droit : esquive, il s’assomme contre les murs',boss:1}]; // u1 grows to 112 when he breaks in
+  {u0:78,u1:96,name:'ENTREPÔT HAZARD',hint:'The Beast fonce tout droit : esquive, il s’assomme contre les murs',boss:1}]; // u1 grows to 112 when he breaks in
 const canvasTex=(w,h,draw,rx=1,ry=1)=>{const c=document.createElement('canvas');c.width=w;c.height=h;draw(c.getContext('2d'));const t=new THREE.CanvasTexture(c);t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.set(rx,ry);t.colorSpace=THREE.SRGBColorSpace;return t};
 // wet asphalt: speckles + bluish sheen patches
 const asphalt=canvasTex(256,256,g=>{g.fillStyle='#2b2e3a';g.fillRect(0,0,256,256);for(let i=0;i<900;i++){g.fillStyle=Math.random()<.5?'#33374a':'#24262f';g.fillRect(Math.random()*256,Math.random()*256,2,2)}
@@ -68,41 +68,14 @@ for(const m of [lb(2.4,2.6,13.4,ribs('#8a3a2a'),97,1.3,0),lb(2.4,2.6,11,ribs('#2
 sign('HAZARD INDUSTRIES','#ffd23a',8,1.4,88,4.3,-7.35);lb(6,3.4,.15,shutterM,88,1.7,-7.35);
 for(const [u,w] of [[101,-4],[108,3.5],[111,-3],[104,4.2]])lb(1.4,1.4,1.4,toon('#7a5a3a'),u,.7,w);
 for(const w of [-5.8,5.8])for(const u of [100,106,112])lb(.6,8,.6,steel,u,4,w);
+// elevated metro line behind the warehouse yard (Deadeye escapes on it)
+for(let u=76;u<=112;u+=8)lb(.6,3,.6,dark,u,1.5,-6.4);lb(40,.4,2.8,toon('#3a3f4a'),95,3,-6.4);for(const w of [-7,-5.8])lb(40,.06,.1,steel,95,3.23,w);
+const train=new THREE.Group();train.add(metroCar(9));const car2=metroCar(9);car2.position.x=-9.3;train.add(car2);train.position.set(40,3.2,-6.4);LV.add(train);
 const STEAM=[[10,-2],[44,1],[68,3],[88,-1]].map(([u,w])=>{lc(.5,.03,dark,u,.02,w);return fromUW(u,w)});
 function animDecor(t){neon.forEach((n,i)=>n.visible=i!==1||(t/90|0)%13!==0)} // one sign flickers
 
 
-// street gang: v thug (hoodie), p punk (mohawk, fast), b brute (bulked, heavy). Mannequin repainted per vertex like Hawkees.
-const SKIN='#e0ac7e',V3=()=>new THREE.Vector3(),pick=a=>a[Math.random()*a.length|0];
-function dress(R,L){const m=R.root;m.updateMatrixWorld(true);const meshes=[];m.traverse(o=>{if(o.isSkinnedMesh)meshes.push(o)});
-  const hipsY=m.getObjectByName('DEF-hips').getWorldPosition(V3()).y,H0=m.getObjectByName('DEF-head').getWorldPosition(V3()).y/1.6*1.8,c=new THREE.Color(),v=V3(),head=new THREE.Box3();R.mats.length=0;
-  for(const mesh of meshes){const geo=mesh.geometry=mesh.geometry.clone(),si=geo.attributes.skinIndex,sw=geo.attributes.skinWeight,bones=mesh.skeleton.bones,n=geo.attributes.position.count,col=new Float32Array(n*3);
-    for(let i=0;i<n;i++){let b=0,w=-1;for(let k=0;k<4;k++){const ww=sw.getComponent(i,k);if(ww>w){w=ww;b=si.getComponent(i,k)}}
-      const name=bones[b].name;mesh.getVertexPosition(i,v);v.applyMatrix4(mesh.matrixWorld);let t;
-      if(/-(head|neck|hand|f_|thumb)/.test(name)){t=L.skin||SKIN;if(name==='DEF-head')head.expandByPoint(v)}
-      else if(/foot|toe|heel/i.test(name)||(/shin/i.test(name)&&v.y<H0*.14))t=L.boots;
-      else if(/thigh|shin/i.test(name)||(/hips/i.test(name)&&v.y<hipsY+H0*.03))t=L.pants;
-      else if(/spine|hips|breast|pelvis/i.test(name)&&v.z>0&&Math.abs(v.x)<H0*.05)t=L.tee;
-      else t=L.jacket;
-      c.set(t);col.set([c.r,c.g,c.b],i*3)}
-    geo.setAttribute('color',new THREE.BufferAttribute(col,3));mesh.material=toon('#ffffff',{vertexColors:true});R.mats.push(mesh.material)}
-  const hs=head.getSize(V3()),hc=head.getCenter(V3()),hb=m.getObjectByName('DEF-head'),stick=o=>{scene.add(o);hb.attach(o)};
-  if(L.hair){const h=new THREE.Mesh(new THREE.SphereGeometry(.5,18,12,0,Math.PI*2,0,Math.PI*.55),toon(L.hair));h.scale.set(hs.x*1.12,hs.y*.9,hs.z*1.15);h.position.set(hc.x,hc.y+hs.y*.08,hc.z-hs.z*.06);h.rotation.x=-.25;stick(h)}
-  if(L.mohawk){const k=new THREE.Mesh(new THREE.BoxGeometry(hs.x*.18,hs.y*.45,hs.z*1.05),toon(L.mohawk));k.position.set(hc.x,hc.y+hs.y*.55,hc.z-hs.z*.05);stick(k)}}
-// bulk build: push bind-pose vertices away from their bone axis (inverse of Phantom's slim); call after dress (geometry already cloned)
-const BULK=[[/spine|hips/,1],[/shoulder/,1.4],[/upper_arm|forearm/,1.05],[/thigh|shin/,1]];
-function bulk(R,f){R.root.traverse(mesh=>{if(!mesh.isSkinnedMesh)return;const geo=mesh.geometry,si=geo.attributes.skinIndex,sw=geo.attributes.skinWeight,bones=mesh.skeleton.bones,inv=mesh.matrixWorld.clone().invert(),pos=geo.attributes.position,v=V3(),d=V3(),q=V3();
-  const ax=bones.map(b=>{const wk=BULK.find(([r])=>r.test(b.name))?.[1],c=b.children.find(o=>o.isBone),a=b.getWorldPosition(V3()).applyMatrix4(inv);return {k:wk?1+(f-1)/wk:1,a,d:c?c.getWorldPosition(V3()).applyMatrix4(inv).sub(a):V3()}});
-  for(let i=0;i<pos.count;i++){let b=0,w=-1;for(let k=0;k<4;k++){const ww=sw.getComponent(i,k);if(ww>w){w=ww;b=si.getComponent(i,k)}}const A=ax[b];if(A.k===1)continue;
-    v.fromBufferAttribute(pos,i);const L2=A.d.lengthSq(),t=L2?Math.min(1,Math.max(0,d.subVectors(v,A.a).dot(A.d)/L2)):0;q.copy(A.a).addScaledVector(A.d,t);v.sub(q).multiplyScalar(A.k).add(q);pos.setXYZ(i,v.x,v.y,v.z)}
-  geo.computeVertexNormals()})}
-const GANG={v:{look:()=>({jacket:pick(['#5a5f6a','#3d5a3a','#6a3a3a']),tee:'#2a2a30',pants:'#34405a',boots:'#e8e8e8',hair:'#22252c'}),hp:40},
-  p:{look:()=>({jacket:'#1c1c22',tee:'#c8203a',pants:'#2a2a3a',boots:'#111111',mohawk:pick(['#ff2fa0','#ffd23a'])}),hp:32,spd:3.3,dmg:6},
-  b:{look:()=>({jacket:'#d8d2c4',tee:'#d8d2c4',pants:'#4a5236',boots:'#2a2018'}),hp:110,spd:1.9,dmg:15,heavy:1,bulk:1.4,h:2.15}};
-const RA={Walking:'Jog_Fwd_Loop',Idle:'Idle_Loop',Punch:'Punch_Cross',Death:'Death01',Dance:'Dance_Loop',Hit:'Hit_Chest'}; // generic action names -> UAL clips
-function spawnRobot(x,z,kind='v'){const K=GANG[kind],R=makeChar(ual,(K.h||1.85)/HEADY,()=>'#ffffff');dress(R,K.look());if(K.bulk)bulk(R,K.bulk);
-  for(const [a,c] of Object.entries(RA))R.acts[a]=R.acts[c];
-  const r={ch:R,x,z,face:0,hp:K.hp,state:'walk',st:0,cd:rand(40,90),kx:0,kz:0,spd:K.spd,dmg:K.dmg,heavy:K.heavy};R.root.position.set(x,0,z);play(R,'Walking');robots.push(r);return r}
+
 
 /* ---------- street gadgets: breakable cans (heal), kickable barrels, puddles Thunderstruck electrifies, manhole steam ---------- */
 const props=[],pickups=[],puddles=[],steamMat=noInk(new THREE.MeshBasicMaterial({color:'#c8d0e0',transparent:true,opacity:.3,depthWrite:false}));
@@ -136,8 +109,8 @@ function updateHazards(){
 const BOSS_COL={charge:'#ff3020',punch:'#ffffff',pound:'#ffb020'},BEAST={jacket:'#b07a58',tee:'#b07a58',skin:'#b07a58',pants:'#3a3f52',boots:'#1e1a18',hair:'#1a1412'};
 function spawnBoss(x,z){const R=makeChar(ual,2.6/HEADY,()=>'#ffffff');dress(R,BEAST);bulk(R,1.55);
   const r={ch:R,x,z,face:-Math.PI*.75,hp:320,max:320,boss:1,base:'#000000',state:'idle',st:0,cd:80,kx:0,kz:0};R.root.position.set(x,0,z);play(R,'Idle_Loop');robots.push(r);return r}
-function bossDown(r){r.state='down';r.st=0;G.over=true;play(r.ch,'Death01',{once:true});r.base='#000000';flash(r.ch,'#000000');G.shake=.5;for(const o of robots)if(o!==r&&alive(o))kill(o);
-  msg('THE BEAST EST K.O.','La rue est libre… pour l’instant · Entrée pour rejouer')}
+function bossDown(r){r.state='down';r.st=0;play(r.ch,'Death01',{once:true});r.base='#000000';flash(r.ch,'#000000');G.shake=.5;for(const o of robots)if(o!==r&&alive(o))kill(o);
+  Object.assign(P,{state:'idle',y:0,vy:0,kx:0,kz:0});startCine(outro(r))}
 function endAtk(r){r.state='idle';r.st=0;r.cd=rand(50,90)*(r.p2?.7:1);unflash(r);r.ch.root.position.y=0}
 function bossAI(r){const R=r.ch,S=r.state;if(S==='down')return;
   if(r.kx||r.kz){r.x+=r.kx*DT;r.z+=r.kz*DT;r.kx*=.85;r.kz*=.85;if(Math.abs(r.kx)+Math.abs(r.kz)<.1)r.kx=r.kz=0}
@@ -198,7 +171,7 @@ const intro={len:760,camU:8,
     // part 2: days later
     if(t===340){say();msg('Quelques jours plus tard…')}
     if(t===375){msg('');this.camU=10;put(P,5,0);P.face=FACE_R;play(H,'Idle_Loop');
-      cast=[[spawnBoss(...fromUW(19,0)),19,0],[spawnRobot(...fromUW(18,-2.4),'v'),17.5,-2.4],[spawnRobot(...fromUW(18.5,2.4),'p'),18,2.4]].map(([r,u,w])=>({r,u,w}));
+      cast=[[spawnBoss(...fromUW(19,0)),19,0],[spawnGang(...fromUW(18,-2.4),'v'),17.5,-2.4],[spawnGang(...fromUW(18.5,2.4),'p'),18,2.4]].map(([r,u,w])=>({r,u,w}));
       for(const c of cast){c.r.face=FACE_L;c.walk=c.r.boss?'Walk_Loop':'Walking';c.idle=c.r.boss?'Idle_Loop':'Idle'}}
     if(t>=375&&t<470)for(const c of cast){put(c.r,lerp(c.u,c.u-7,(t-380)/85),c.w);play(c.r.ch,t<465?c.walk:c.idle)}
     if(t===480)say('THE BEAST','Cette ville a de nouveaux maîtres : moi et ma bande. Dégage, le héros.','#ff6a50');
@@ -209,7 +182,38 @@ const intro={len:760,camU:8,
     if(t>690)for(const c of cast){const [u,w]=toUW(c.r.x,c.r.z);put(c.r,u-.06,w)}},
   end(){for(const c of cast){scene.remove(c.r.ch.root);robots.splice(robots.indexOf(c.r),1)}cast=[];put(P,3,0);P.face=FACE_R;play(H,'Idle_Loop');G.shake=0}};
 
-start({intro,ZONES,gates,spawn:spawnRobot,spawnBoss,bossAI,bossDown,BOSS_COL,bossName:'THE BEAST',bossColor:['#ff6a50','#e0301a'],
+/* ---------- outro (V1 after0): The Beast flees, Deadeye misses his shot and jumps on a passing metro; the hero follows -> level 2 ---------- */
+function outro(B){let hu,D,de,ride=0;const trainU=t=>hu+8+(t-375)/6,arc=(k,h)=>Math.sin(Math.min(1,Math.max(0,k))*Math.PI)*h;
+  return {len:530,u(t){
+    if(t===1){hu=Math.min(toUW(P.x,P.z)[0],100);put(P,hu,0);P.face=FACE_R;play(H,'Idle_Loop')}
+    this.camU=t>150&&t<440?hu+3.5:toUW(P.x,P.z)[0]; this.camY=1.4+clamp((t-280)/40,0,1)*2.8+clamp((t-470)/25,0,1)*1.6; // frame hero and Deadeye together, then tilt up to the viaduct
+    if(t===50)play(B.ch,'Crouch_Idle_Loop');if(t===60)say('THE BEAST','Grr… Ce n’est pas fini ! Tu entendras encore parler de moi !','#ff6a50');
+    if(t===130){say();B.face=FACE_R;play(B.ch,'Sprint_Loop')}
+    if(t>130&&B.ch.root.visible){const [u,w]=toUW(B.x,B.z);put(B,u+.2,w);if(u>111)B.ch.root.visible=false}
+    if(t===150){de=makeDeadeye();D={ch:de.ch,hp:0,state:'cine',st:0,face:FACE_L,x:0,z:0};robots.push(D);put(D,hu+9.5,-3);play(D.ch,'Walk_Loop')}
+    if(t>150&&t<190){const [u,w]=toUW(D.x,D.z);put(D,u-.08,w)}
+    if(t===190)play(D.ch,'Pistol_Aim_Neutral');
+    if(t>=195&&t<238)aimLaser((t<228||t%4<2)&&de.tip.getWorldPosition(V3()),V3().set(P.x,1.3,P.z));
+    if(t===228)play(H,'Jump_Loop');if(t>=228&&t<=262)P.y=arc((t-228)/34,1.8);if(t===262)play(H,'Idle_Loop');
+    if(t===238){aimLaser();play(D.ch,'Pistol_Shoot',{once:true});const a=de.tip.getWorldPosition(V3()),d=V3().set(P.x,1.3,P.z).sub(a).normalize();
+      fxMesh(new THREE.BoxGeometry(.05,.05,.6),'#ffe9a0',[a.x,a.y,a.z],.6,d.multiplyScalar(30)).lookAt(a.clone().add(d));G.shake=.2}
+    if(t===270)say('DEADEYE','Tch… De bons réflexes. Rattrape-moi si tu peux !','#d8d8d8');
+    if(t>=230)train.position.x=trainU(t);
+    if(t===330){say();D.face=Math.atan2(...fromUW(1,-1).map((v,i)=>v-fromUW(0,0)[i]));play(D.ch,'Sprint_Loop')}
+    if(t>330&&t<350){const [u,w]=toUW(D.x,D.z);put(D,u,w-.07)}
+    if(t===350){play(D.ch,'Jump_Loop');D.u0=toUW(D.x,D.z)}
+    if(t>=350&&t<375){const k=(t-350)/25;put(D,D.u0[0]+(trainU(375)-D.u0[0])*k,D.u0[1]+(-6.4-D.u0[1])*k);D.ch.root.position.y=5.8*k+arc(k,1.5)}
+    if(t>=375){put(D,trainU(t),-6.4);D.face=FACE_R;D.ch.root.position.y=5.8;if(t===375)play(D.ch,'Pistol_Idle_Loop')}
+    if(t===390)say('THUNDERSTRUCK','Woah, raté ! Hé, reviens ici !',CYAN);
+    if(t===440){say();P.face=FACE_R;play(H,'Sprint_Loop')}
+    if(t>440&&t<470){const [u,w]=toUW(P.x,P.z),tu=trainU(470)-9.3;put(P,u+(tu-u)*.08,w+(-4.5-w)*.08)}
+    if(t===470){play(H,'Jump_Loop');ride=toUW(P.x,P.z)}
+    if(t>=470&&t<495){const k=(t-470)/25;put(P,ride[0]+(trainU(495)-9.3-ride[0])*k,ride[1]+(-6.4-ride[1])*k);P.y=5.8*k+arc(k,1.5)}
+    if(t>=495){put(P,trainU(t)-9.3,-6.4);P.y=5.8;if(t===495)play(H,'Idle_Loop')}
+    fade(t>=500?(t-500)/30:0)},
+  end(){location.href='metro.html'}}}
+
+start({intro,ZONES,gates,spawn:spawnGang,spawnBoss,bossAI,bossDown,BOSS_COL,bossName:'THE BEAST',bossColor:['#ff6a50','#e0301a'],
   bossDmg:r=>r.state==='stunned'?1.5:.6,onLightning:r=>zapPuddles(r.x,r.z),onStrike:hitProps,update:t=>{updateHazards();animDecor(t)}});
 </script>
 </body></html>

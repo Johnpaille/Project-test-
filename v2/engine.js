@@ -71,6 +71,54 @@ const P={x:-18,z:0,y:0,vy:0,face:0,hp:100,en:0,state:'idle',st:0,combo:0,buf:fal
 [P.x,P.z]=fromUW(3,0);P.face=Math.PI*.75;H.root.position.set(P.x,0,P.z);play(H,ANIM.idle);
 
 const robots=[];
+/* ---------- street gang kit (levels 1-2) ---------- */
+// street gang: v thug (hoodie), p punk (mohawk, fast), b brute (bulked, heavy). Mannequin repainted per vertex like Hawkees.
+const SKIN='#e0ac7e',V3=()=>new THREE.Vector3(),pick=a=>a[Math.random()*a.length|0];
+function dress(R,L){const m=R.root;m.updateMatrixWorld(true);const meshes=[];m.traverse(o=>{if(o.isSkinnedMesh)meshes.push(o)});
+  const hipsY=m.getObjectByName('DEF-hips').getWorldPosition(V3()).y,H0=m.getObjectByName('DEF-head').getWorldPosition(V3()).y/1.6*1.8,c=new THREE.Color(),v=V3(),head=new THREE.Box3();R.mats.length=0;
+  for(const mesh of meshes){const geo=mesh.geometry=mesh.geometry.clone(),si=geo.attributes.skinIndex,sw=geo.attributes.skinWeight,bones=mesh.skeleton.bones,n=geo.attributes.position.count,col=new Float32Array(n*3);
+    for(let i=0;i<n;i++){let b=0,w=-1;for(let k=0;k<4;k++){const ww=sw.getComponent(i,k);if(ww>w){w=ww;b=si.getComponent(i,k)}}
+      const name=bones[b].name;mesh.getVertexPosition(i,v);v.applyMatrix4(mesh.matrixWorld);let t;
+      if(/-(head|neck|hand|f_|thumb)/.test(name)){t=L.skin||SKIN;if(name==='DEF-head')head.expandByPoint(v)}
+      else if(/foot|toe|heel/i.test(name)||(/shin/i.test(name)&&v.y<H0*.14))t=L.boots;
+      else if(/thigh|shin/i.test(name)||(/hips/i.test(name)&&v.y<hipsY+H0*.03))t=L.pants;
+      else if(/spine|hips|breast|pelvis/i.test(name)&&v.z>0&&Math.abs(v.x)<H0*.05)t=L.tee;
+      else t=L.jacket;
+      c.set(t);col.set([c.r,c.g,c.b],i*3)}
+    geo.setAttribute('color',new THREE.BufferAttribute(col,3));mesh.material=toon('#ffffff',{vertexColors:true});R.mats.push(mesh.material)}
+  const hs=head.getSize(V3()),hc=head.getCenter(V3()),hb=m.getObjectByName('DEF-head'),stick=o=>{scene.add(o);hb.attach(o)};
+  if(L.hair){const h=new THREE.Mesh(new THREE.SphereGeometry(.5,18,12,0,Math.PI*2,0,Math.PI*.55),toon(L.hair));h.scale.set(hs.x*1.12,hs.y*.9,hs.z*1.15);h.position.set(hc.x,hc.y+hs.y*.08,hc.z-hs.z*.06);h.rotation.x=-.25;stick(h)}
+  if(L.mohawk){const k=new THREE.Mesh(new THREE.BoxGeometry(hs.x*.18,hs.y*.45,hs.z*1.05),toon(L.mohawk));k.position.set(hc.x,hc.y+hs.y*.55,hc.z-hs.z*.05);stick(k)}}
+// bulk build: push bind-pose vertices away from their bone axis (inverse of Phantom's slim); call after dress (geometry already cloned)
+const BULK=[[/spine|hips/,1],[/shoulder/,1.4],[/upper_arm|forearm/,1.05],[/thigh|shin/,1]];
+function bulk(R,f){R.root.traverse(mesh=>{if(!mesh.isSkinnedMesh)return;const geo=mesh.geometry,si=geo.attributes.skinIndex,sw=geo.attributes.skinWeight,bones=mesh.skeleton.bones,inv=mesh.matrixWorld.clone().invert(),pos=geo.attributes.position,v=V3(),d=V3(),q=V3();
+  const ax=bones.map(b=>{const wk=BULK.find(([r])=>r.test(b.name))?.[1],c=b.children.find(o=>o.isBone),a=b.getWorldPosition(V3()).applyMatrix4(inv);return {k:wk?1+(f-1)/wk:1,a,d:c?c.getWorldPosition(V3()).applyMatrix4(inv).sub(a):V3()}});
+  for(let i=0;i<pos.count;i++){let b=0,w=-1;for(let k=0;k<4;k++){const ww=sw.getComponent(i,k);if(ww>w){w=ww;b=si.getComponent(i,k)}}const A=ax[b];if(A.k===1)continue;
+    v.fromBufferAttribute(pos,i);const L2=A.d.lengthSq(),t=L2?Math.min(1,Math.max(0,d.subVectors(v,A.a).dot(A.d)/L2)):0;q.copy(A.a).addScaledVector(A.d,t);v.sub(q).multiplyScalar(A.k).add(q);pos.setXYZ(i,v.x,v.y,v.z)}
+  geo.computeVertexNormals()})}
+const GANG={v:{look:()=>({jacket:pick(['#5a5f6a','#3d5a3a','#6a3a3a']),tee:'#2a2a30',pants:'#34405a',boots:'#e8e8e8',hair:'#22252c'}),hp:40},
+  p:{look:()=>({jacket:'#1c1c22',tee:'#c8203a',pants:'#2a2a3a',boots:'#111111',mohawk:pick(['#ff2fa0','#ffd23a'])}),hp:32,spd:3.3,dmg:6},
+  b:{look:()=>({jacket:'#d8d2c4',tee:'#d8d2c4',pants:'#4a5236',boots:'#2a2018'}),hp:110,spd:1.9,dmg:15,heavy:1,bulk:1.4,h:2.15}};
+const RA={Walking:'Jog_Fwd_Loop',Idle:'Idle_Loop',Punch:'Punch_Cross',Death:'Death01',Dance:'Dance_Loop',Hit:'Hit_Chest'}; // generic action names -> UAL clips
+function spawnGang(x,z,kind='v'){const K=GANG[kind],R=makeChar(ual,(K.h||1.85)/HEADY,()=>'#ffffff');dress(R,K.look());if(K.bulk)bulk(R,K.bulk);
+  for(const [a,c] of Object.entries(RA))R.acts[a]=R.acts[c];
+  const r={ch:R,x,z,face:0,hp:K.hp,state:'walk',st:0,cd:rand(40,90),kx:0,kz:0,spd:K.spd,dmg:K.dmg,heavy:K.heavy};R.root.position.set(x,0,z);play(R,'Walking');robots.push(r);return r}
+// Deadeye: sharpshooter of The Beast's gang. Returns the character and the crossbow tip (for the laser sight and bolts).
+const DEADEYE={jacket:'#4a4f58',tee:'#2a2a2a',pants:'#5a3a1a',boots:'#2a1a10',hair:'#111111'};
+function makeDeadeye(){const R=makeChar(ual,1.95/HEADY,()=>'#ffffff');dress(R,DEADEYE);R.root.updateMatrixWorld(true);
+  const hand=R.bone('DEF-handR'),p=hand.getWorldPosition(V3()),dir=p.clone().sub(R.bone('DEF-forearmR').getWorldPosition(V3())).normalize();
+  const bow=new THREE.Group(),stock=new THREE.Mesh(new THREE.BoxGeometry(.06,.07,.5),toon('#5a3a1a')),limb=new THREE.Mesh(new THREE.BoxGeometry(.55,.04,.05),toon('#9aa4b4')),tip=new THREE.Object3D();
+  stock.position.z=.12;limb.position.z=.34;tip.position.z=.38;bow.add(stock,limb,tip);bow.position.copy(p);bow.lookAt(p.clone().add(dir));scene.add(bow);hand.attach(bow);
+  return {ch:R,tip}}
+const laserSight=new THREE.Line(new THREE.BufferGeometry().setFromPoints([V3(),V3()]),new THREE.LineBasicMaterial({color:'#ff2020'}));laserSight.visible=false;scene.add(laserSight);
+function aimLaser(from,to){laserSight.visible=!!from;if(from)laserSight.geometry.setFromPoints([from,to])} // aimLaser() hides it
+// metro car of the Steel City elevated line, built along local x (use it inside LV); roof top at y = hgt
+function metroCar(len,wid=2.6,hgt=2.6){const g=new THREE.Group(),add=(w,h,d,c,x,y,z=0)=>{const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),c);m.position.set(x,y,z);m.castShadow=m.receiveShadow=true;g.add(m);return m};
+  add(len,hgt*.8,wid,toon('#b9c2cc'),0,hgt*.55);add(len,hgt*.05,wid*.96,toon('#8a929c'),0,hgt*.975);add(len+.02,hgt*.07,wid+.02,toon('#c0392b'),0,hgt*.33);
+  for(let x=-len/2+1.2;x<len/2-1;x+=2.2)add(1.3,hgt*.22,wid+.03,glowM('#fff1c0'),x,hgt*.65);
+  for(const s of [-1,1])add(2.6,hgt*.16,wid*.8,toon('#22252e'),s*len*.33,hgt*.08);
+  add(.6,.08,.08,toon('#22252e'),0,hgt+.3,0).rotation.z=.7;add(.6,.08,.08,toon('#22252e'),.4,hgt+.3,0).rotation.z=-.7; // pantograph
+  return g}
 
 
 /* ---------- effects ---------- */
@@ -200,7 +248,7 @@ shield.material.userData.outlineParameters={visible:false};shield.visible=false;
 // shared mutable state (levels read and write it through G)
 const G={shake:0,over:false,T:0,zone:0,cleared:-1,fighting:false,msgT:0},UB=[0,0];
 // keep a body inside the open part of the level (the locked zone during a fight)
-function keep(o){let [u,w]=toUW(o.x,o.z);u=clamp(u,UB[0],UB[1]);w=clamp(w,-WD,WD);[o.x,o.z]=fromUW(u,w)}
+function keep(o){let [u,w]=toUW(o.x,o.z);const wd=L?.WD??WD;u=clamp(u,UB[0],UB[1]);w=clamp(w,-wd,wd);[o.x,o.z]=fromUW(u,w)}
 const msgEl=document.getElementById('msg');function msg(h,s=''){msgEl.innerHTML=h?`<h1>${h}</h1><div>${s}</div>`:''}
 function updatePlayer(){G.T++;
   if(P.inv>0&&--P.inv===0)flash(H,'#000000');if(P.inv===30)flash(H,'#000000');
@@ -341,15 +389,15 @@ function startCine(c){G.cine={t:0,...c};document.body.classList.add('cine')}
 function endCine(){const c=G.cine;G.cine=null;c.end?.();say();fade(0);msg('');document.body.classList.remove('cine')}
 function updateCine(){const c=G.cine;if(c.t>20&&(c.skip||pressed('attack')||pressed('jump')||keys.enter))return endCine();c.u(++c.t);if(c.t>=c.len)endCine()}
 let acc=0,last=performance.now();
-function placeCam(){const [tx,tz]=fromUW(G.cine?.camU??toUW(P.x,P.z)[0],-1.4),tgt=new THREE.Vector3(tx,1.4,tz); // beat em up camera: follows along the level, fixed depth
+function placeCam(){const [tx,tz]=fromUW(G.cine?.camU??toUW(P.x,P.z)[0],-1.4),tgt=new THREE.Vector3(tx,G.cine?.camY??1.4,tz); // beat em up camera: follows along the level, fixed depth
   cam.position.copy(tgt).add(CAM_OFF);if(G.shake>0){cam.position.x+=rand(-G.shake,G.shake);cam.position.y+=rand(-G.shake,G.shake);G.shake=Math.max(0,G.shake-DT)}
   cam.lookAt(tgt);sun.position.set(P.x+8,20,P.z+6);sun.target.position.set(P.x,0,P.z)}
 function frame(now){acc+=Math.min(.1,(now-last)/1000);last=now;while(acc>=DT){step();acc-=DT}placeCam();outline.render(scene,cam);requestAnimationFrame(frame)}
-// level: {ZONES, gates, spawn(x,z,kind), spawnBoss(x,z), bossAI(r), bossDown(r), BOSS_COL, update(t), bossName, bossColor:[label,bar]}
+// level: {ZONES, gates, WD? (half width of the walkable strip), spawn(x,z,kind), spawnBoss(x,z), bossAI(r), bossDown(r), BOSS_COL, update(t), bossName, bossColor:[label,bar]}
 // optional: intro cutscene (see startCine); hooks bossDmg(r) damage factor, onLightning(r), onStrike(reach,fx,fz), onKnock(r) -> true if it killed r
 function start(level){L=level;if(L.intro)startCine(L.intro);ZONES=L.ZONES;UB[0]=ZONES[0].u0+.6;UB[1]=ZONES[0].u1-.6;
   const b=document.querySelector('#boss b');b.textContent=L.bossName;b.style.color=L.bossColor[0];document.querySelector('#boss i').style.background=L.bossColor[1];
   requestAnimationFrame(frame);window.__v2={P,H,robots,step,G,ZONES,fromUW,toUW,render:()=>{placeCam();outline.render(scene,cam)},cam,L}} // test hook
 return {DT,rand,clamp,renderer,scene,hemi,sun,toon,S2,toUW,fromUW,WD,LV,noInk,glowM,fieldM,lb,lc,ual,HEADY,makeChar,play,flash,CYAN,P,H,robots,fx,spark,bolt,glow,fxMesh,kill,
-  hurtRobot,hurtPlayer,releaseGrab,alive,nearestRobot,unflash,keep,msg,pressed,G,UB,eshot,eproj,start,aura,handArc,say,fade,startCine};
+  hurtRobot,hurtPlayer,releaseGrab,alive,nearestRobot,unflash,keep,msg,pressed,G,UB,eshot,eproj,start,aura,handArc,say,fade,startCine,dress,bulk,spawnGang,metroCar,V3,SKIN,makeDeadeye,aimLaser};
 };

@@ -41,7 +41,7 @@ Héros jouables : Thunderstruck (foudre, cyan), Hawkees (feu, orange), Phantom (
 
 **Danger** : les flaques d'eau, électrifiables par Thunderstruck ou par un câble arraché.
 
-**Fait (prototype `v2/rue.html`)** : 4 zones (avenue, ruelle, chantier, cour de l’entrepôt), voyous, punks et brute (mannequin peint), poubelles qui soignent, bidons à lancer, flaques que la foudre électrise, vapeur des égouts, The Beast en 2 phases (charges, onde de choc, barricade de conteneurs défoncée). Reste : câble arraché, scène de fin, enchaînement avec le niveau suivant.
+**Fait (prototype `v2/rue.html`)** : 4 zones (avenue, ruelle, chantier, cour de l’entrepôt), voyous, punks et brute (mannequin peint), poubelles qui soignent, bidons à lancer, flaques que la foudre électrise, vapeur des égouts, The Beast en 2 phases (charges, onde de choc, barricade de conteneurs défoncée). Cinématiques d’intro (météorites) et de fin (The Beast s’enfuit, Deadeye rate son tir et saute sur un métro, le héros le suit vers le niveau 2). Reste : câble arraché.
 
 **Boss, The Beast** :
 - Phase 1 : il charge en ligne droite, et rate sa charge s'il percute un mur.
@@ -72,6 +72,8 @@ Héros jouables : Thunderstruck (foudre, cyan), Hawkees (feu, orange), Phantom (
 - Il tire de loin, avec une **ligne de visée** visible avant chaque tir.
 - Il recule de wagon en wagon : il faut le rattraper entre deux obstacles.
 - Phase 2 (Deadeye 2) : rafales en éventail.
+
+**Fait (`v2/metro.html`)** : alternance arène / course. 10 wagons, combats sur les wagons 1, 4, 7 et 10 ; entre eux, course automatique : sauter les attelages, s’accroupir (H) sous les ponts bas, sauter les portiques, annoncés à l’écran. La ville, les poteaux et la voie défilent. Caténaire côté fond : recharge plus rapide, ennemis projetés dessous électrocutés. Deadeye : garde ses distances, tir visé (le laser se fige juste avant le tir), rafale de 3, coup de pied ; phase 2 : éventail de 5 et 2 punks en renfort. Fin : il indique SkyCell. Pas encore : Deadeye qui recule de wagon en wagon, ennemis qui descendent d’un pont, tunnels.
 
 ## 3. SkyCell (prototype existant)
 
