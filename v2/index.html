@@ -1,88 +1,25 @@
 <!doctype html>
 <html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Mythic Brawl V2</title>
-<style>
-  html,body{margin:0;height:100%;overflow:hidden;background:#1a2350;font-family:system-ui,sans-serif;color:#fff;user-select:none}
-  canvas{display:block}
-  #hud{position:fixed;left:16px;top:12px;width:260px;pointer-events:none;text-shadow:0 1px 2px #000}
-  #hud b{font-size:18px;letter-spacing:1px;color:#9df}
-  .bar{height:12px;background:#300;border:2px solid #000;margin-top:4px}.bar i{display:block;height:100%;background:#3d3;transition:width .1s}
-  #en{height:7px}#en i{background:#58a}
-  #wave{position:fixed;right:16px;top:12px;text-align:right;font-weight:bold;text-shadow:0 1px 2px #000}
-  #msg{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;text-align:center;pointer-events:none;text-shadow:0 2px 4px #000}
-  #msg h1{margin:0;font-size:clamp(28px,6vw,56px);color:#ffe14d}
-  #help{position:fixed;left:0;right:0;bottom:8px;text-align:center;font-size:12px;color:#ccd;text-shadow:0 1px 2px #000;pointer-events:none;padding:0 16px}
-  #back{position:fixed;right:16px;bottom:8px;color:#aab;font-size:12px}
-  #touch{position:fixed;inset:0;pointer-events:none;display:none;-webkit-user-select:none;-webkit-touch-callout:none}
-  #touch div{pointer-events:auto;touch-action:none;position:absolute;border-radius:50%;background:rgba(255,255,255,.12);border:2px solid rgba(255,255,255,.35);
-    color:rgba(255,255,255,.85);font:bold 11px system-ui,sans-serif;display:flex;align-items:center;justify-content:center;width:58px;height:58px}
-  #touch div:active{background:rgba(255,255,255,.3)}
-  body.touch #help,body.touch #back{display:none}
-  #load{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;font-size:18px;background:#0a0820}
-</style>
+<title>Mythic Brawl V2 · SkyCell</title>
 <script src="models/ual1.js"></script>
+<script src="engine.js"></script>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
-</head><body>
-<div id="hud"><b>THUNDERSTRUCK</b> <span id="pow" style="color:#3ef0ff;font-weight:bold"></span><div class="bar" id="hp"><i style="width:100%"></i></div><div class="bar" id="en"><i style="width:0"></i></div></div>
-<div id="boss" style="position:fixed;left:50%;top:12px;width:min(320px,60vw);transform:translateX(-50%);display:none;text-align:center;text-shadow:0 1px 2px #000"><b style="color:#a99cff;letter-spacing:2px">INDIGO</b><div class="bar"><i style="width:100%;background:#7a6cff"></i></div></div><div id="wave"></div><div id="msg"></div>
-<div id="help">ZQSD/flèches : bouger (2× : sprint) · J : frapper (maintenir : coup chargé) · K/Espace : sauter · L : tempête · M : poings chargés · H maintenu : charger l'énergie (pleine + 1 s : power-up) · G : invisible · F/Maj : garde (+direction : téléport) · contre un robot : saisie (J, J+dir, K, G) · manette OK · Échap : menu</div>
-<div id="touch"><!-- shown on first touch; each button holds the keyboard key of BIND -->
-  <div id="stick" style="left:18px;bottom:18px;width:130px;height:130px">◀ ▲ ▼ ▶</div>
-  <div data-k="j" style="right:84px;bottom:16px;width:66px;height:66px">FRAPPE</div>
-  <div data-k="k" style="right:14px;bottom:66px">SAUT</div>
-  <div data-k="f" style="right:160px;bottom:16px">GARDE</div>
-  <div data-k="l" style="right:160px;bottom:88px">TEMPÊTE</div>
-  <div data-k="m" style="right:88px;bottom:94px">POINGS</div>
-  <div data-k="h" style="right:14px;bottom:138px">CHARGE</div>
-  <div data-k="g" style="right:88px;bottom:166px">INVISIBLE</div>
-  <div data-k="escape" style="right:16px;top:40px;width:60px;height:30px;border-radius:8px">MENU</div>
-</div>
-<a id="back" href="../index.html">← Menu</a>
-<div id="load">Chargement des modèles 3D…</div>
+</head><body style="margin:0;background:#0a0820">
+<div id="load" style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;font:18px system-ui,sans-serif;color:#fff;background:#0a0820">Chargement des modèles 3D…</div>
 <script type="module">
-// V2 prototype: same game ideas as V1 (x = right, z = depth, y = up), rendered in 3D with toon shading + outlines, isometric camera.
-// Hero: Quaternius Universal Animation Library mannequin (CC0, models/ual1.js). Hazard guards, prisoners and Indigo are the same mannequin repainted.
+// Level 3 of the campaign, SkyCell: Hazard Industries flying prison, boss Indigo. Engine: engine.js.
 import * as THREE from 'three';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 import {OutlineEffect} from 'three/addons/effects/OutlineEffect.js';
-
-const DT=1/60,VIEW=6.6;
-const rand=(a,b)=>a+Math.random()*(b-a),clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
-
-/* ---------- renderer, camera, lights ---------- */
-const renderer=new THREE.WebGLRenderer({antialias:true,preserveDrawingBuffer:true});
-renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
-document.body.prepend(renderer.domElement);
-const outline=new OutlineEffect(renderer,{defaultThickness:.006,defaultColor:[0,0,0]});
-const scene=new THREE.Scene();scene.background=new THREE.Color('#25306a');scene.fog=new THREE.Fog('#25306a',60,110);
-const cam=new THREE.OrthographicCamera(-1,1,1,-1,-100,300);const CAM_OFF=new THREE.Vector3(18,15,18);
-// portrait: zoom out to keep the width
-function resize(){const a=innerWidth/innerHeight,v=VIEW*Math.max(1,.9/a);Object.assign(cam,{left:-v*a,right:v*a,top:v,bottom:-v});cam.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight)}
-addEventListener('resize',resize);resize();
-scene.add(new THREE.HemisphereLight('#c8d4ff','#3a3050',1.1));
-const sun=new THREE.DirectionalLight('#fff4dd',2.2);sun.position.set(8,20,6);sun.castShadow=true;sun.shadow.mapSize.set(2048,2048);
-Object.assign(sun.shadow.camera,{left:-20,right:20,top:20,bottom:-20,near:1,far:60});scene.add(sun,sun.target);
-
-// toon shading: 3 flat light bands
-const grad=new THREE.DataTexture(new Uint8Array([90,90,90,255,175,175,175,255,255,255,255,255]),3,1);grad.minFilter=grad.magFilter=THREE.NearestFilter;grad.needsUpdate=true;
-const toon=(color,o={})=>new THREE.MeshToonMaterial({color,gradientMap:grad,...o});
-const box=(w,h,d,mat,x,y,z)=>{const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);m.position.set(x,y,z);m.castShadow=m.receiveShadow=true;scene.add(m);return m};
+const {DT,rand,clamp,scene,toon,toUW,fromUW,WD,LV,noInk,glowM,fieldM,lb,lc,ual,HEADY,makeChar,play,flash,CYAN,P,H,robots,fx,spark,bolt,glow,fxMesh,kill,hurtPlayer,alive,unflash,keep,msg,pressed,G,eshot,eproj,start}=await MBEngine({THREE,GLTFLoader,SkeletonUtils,OutlineEffect});
 
 /* ---------- SkyCell: 4 zones along the screen-right axis ---------- */
-// Level frame: u runs to the right of the screen, w toward the camera. The LV group is turned 45° so its local x = u, local z = w.
-const S2=Math.SQRT2,toUW=(x,z)=>[(x-z)/S2,(x+z)/S2],fromUW=(u,w)=>[(u+w)/S2,(w-u)/S2],WD=5.2;
 const ZONES=[
   {u0:0,u1:26,name:'HANGAR',hint:'Gare aux rafales : elles poussent vers le vide (robots compris)',wave:[[14,-3],[18,3],[22,0,'s']]},
   {u0:26,u1:52,name:'BLOC DES CELLULES',hint:'Frappe la console d’alarme pour libérer les détenus',wave:[[14,-4],[18,1,'s'],[10,4]]},
   {u0:52,u1:78,name:'CŒUR DU RÉACTEUR',hint:'Projette les robots dans les lasers',wave:[[14,-4],[18,0,'s'],[12,4],[4,-4,'s']]},
   {u0:78,u1:100,name:'SALLE DE CONFINEMENT',hint:'Indigo imite les héros : sa couleur annonce l’attaque',boss:1}];
-const LV=new THREE.Group();LV.rotation.y=Math.PI/4;scene.add(LV);
-const noInk=m=>(m.userData.outlineParameters={visible:false},m);
-const glowM=c=>noInk(new THREE.MeshBasicMaterial({color:c}));
-const fieldM=(c,o)=>noInk(new THREE.MeshBasicMaterial({color:c,transparent:true,opacity:o,blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide}));
-const lb=(w,h,d,mat,x,y,z)=>{const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);m.position.set(x,y,z);m.castShadow=m.receiveShadow=true;LV.add(m);return m};
-const lc=(r,h,mat,x,y,z,o={})=>{const m=new THREE.Mesh(new THREE.CylinderGeometry(o.r2??r,r,h,o.seg||24,1,!!o.open),mat);m.position.set(x,y,z);m.castShadow=m.receiveShadow=!o.noShadow;LV.add(m);return m};
 function deckTexture(){const c=document.createElement('canvas');c.width=c.height=256;const g=c.getContext('2d');
   g.fillStyle='#5a6274';g.fillRect(0,0,256,256);g.strokeStyle='#454c5c';g.lineWidth=3;for(let i=0;i<=256;i+=64){g.beginPath();g.moveTo(i,0);g.lineTo(i,256);g.moveTo(0,i);g.lineTo(256,i);g.stroke()}
   g.fillStyle='#7b8496';for(let x=8;x<256;x+=64)for(let y=8;y<256;y+=64){g.fillRect(x,y,4,4);g.fillRect(x+48,y+48,4,4)}
@@ -129,36 +66,7 @@ const cloudMat=toon('#cfd8ff'),clouds=[];
 for(let i=0;i<70;i++){const c=new THREE.Mesh(new THREE.SphereGeometry(rand(3,7),12,8),cloudMat);c.scale.y=.4;c.position.set(rand(-110,110),rand(-18,-8),rand(-110,110));
   noInk(c);scene.add(c);clouds.push(c)}
 
-/* ---------- characters ---------- */
-const loader=new GLTFLoader();
-const ual=await new Promise((ok,ko)=>loader.parse(Uint8Array.from(atob(window.UAL1),c=>c.charCodeAt(0)).buffer,'',ok,ko));
-document.getElementById('load').remove();
-function makeChar(gltf,scale,colorOf){
-  const root=SkeletonUtils.clone(gltf.scene),mats=[];root.scale.setScalar(scale);
-  root.traverse(o=>{if(o.isMesh){o.castShadow=true;o.frustumCulled=false;const m=toon(colorOf(o.material.name,o.material.color));m.skinning=true;o.material=m;mats.push(m)}});
-  scene.add(root);const mixer=new THREE.AnimationMixer(root),acts={};for(const c of gltf.animations)acts[c.name]=mixer.clipAction(c);
-  return{root,mixer,acts,mats,cur:null,bone:n=>root.getObjectByName(n)};
-}
-function play(ch,name,{once=false,fade=.12,speed=1}={}){const a=ch.acts[name];if(!a||(ch.cur===a&&!once))return;
-  a.reset();a.setLoop(once?THREE.LoopOnce:THREE.LoopRepeat,Infinity);a.clampWhenFinished=once;a.timeScale=speed;a.fadeIn(fade).play();
-  if(ch.cur&&ch.cur!==a)ch.cur.fadeOut(fade);ch.cur=a}
-function flash(ch,col){for(const m of ch.mats)m.emissive.set(col)}
 
-// hero: Thunderstruck, "Tempête" costume (black suit, cyan joints, chest bolt, visor). Bone names lose their dots in three.js.
-const CYAN='#3ef0ff';ual.scene.updateMatrixWorld(true);
-const HEADY=ual.scene.getObjectByName('DEF-head').getWorldPosition(new THREE.Vector3()).y,H=makeChar(ual,2.05/HEADY,n=>n==='M_Joints'?CYAN:'#1b1d2a');
-{const fwd=new THREE.Vector3(0,0,1),k=H.root.scale.x;H.root.updateMatrixWorld(true);const wp=n=>H.bone(n).getWorldPosition(new THREE.Vector3());
-  const stick=(mesh,b,pos)=>{mesh.position.copy(pos);mesh.lookAt(pos.clone().add(fwd));mesh.castShadow=true;scene.add(mesh);H.bone(b).attach(mesh)};
-  const sh=new THREE.Shape([[0,.11],[-.05,0],[0,0],[-.03,-.11],[.06,.02],[.01,.02],[.04,.11]].map(p=>new THREE.Vector2(...p)));
-  stick(new THREE.Mesh(new THREE.ExtrudeGeometry(sh,{depth:.02,bevelEnabled:false}).scale(k,k,k),toon(CYAN,{emissive:CYAN,emissiveIntensity:.35})),'DEF-spine003',wp('DEF-spine003').addScaledVector(fwd,.13*k).add(new THREE.Vector3(0,.02*k,0)));
-  stick(new THREE.Mesh(new THREE.BoxGeometry(.2*k,.05*k,.06*k),toon('#0e1a22')),'DEF-head',wp('DEF-head').addScaledVector(fwd,.1*k).add(new THREE.Vector3(0,.09*k,0)))}
-// clip per state; attack clips are time-scaled to fit the combo timings
-const ANIM={idle:'Idle_Loop',walk:'Jog_Fwd_Loop',jump:'Jump_Loop',cast:'Spell_Simple_Shoot',hit:'Hit_Chest',dead:'Death01',atk:['Punch_Jab','Punch_Cross','Sword_Attack'],
-  guard:'Spell_Simple_Idle_Loop',charge:'Crouch_Idle_Loop',hold:'Punch_Enter',catk:'Spell_Simple_Shoot',dash:'Sprint_Loop',datk:'Punch_Cross',air:'Punch_Jab',grab:'Push_Loop',knee:'Punch_Jab',throw:'Sword_Attack'};
-const P={x:-18,z:0,y:0,vy:0,face:0,hp:100,en:0,state:'idle',st:0,combo:0,buf:false,inv:0,hits:new Set(),pow:0,invis:0,zap:0,held:null,grabCd:0,ja:0,at:99,jvx:0,jvz:0,hold:0,ch:0,pf:0,tapK:null,tapT:-99};
-[P.x,P.z]=fromUW(3,0);P.face=Math.PI*.75;H.root.position.set(P.x,0,P.z);play(H,ANIM.idle);
-
-const robots=[];
 // g guard (melee), s gunner, p freed prisoner (permanent ally). Generic action names map to UAL clips.
 const ROBO={g:{suit:'#5a6274',joint:'#ff3040',hp:40},s:{suit:'#3e4656',joint:'#ffb020',hp:30,gun:1},p:{suit:'#ff8a2a',joint:'#2a2a2a',hp:60,pris:1}};
 const RA={Walking:'Jog_Fwd_Loop',Idle:'Idle_Loop',Punch:'Punch_Cross',Death:'Death01',Dance:'Dance_Loop',Hit:'Hit_Chest'},GUN={Walking:'Walk_Loop',Idle:'Pistol_Idle_Loop',Punch:'Pistol_Shoot'};
@@ -168,285 +76,41 @@ function spawnRobot(x,z,kind='g'){const K=ROBO[kind],R=makeChar(ual,1.85/HEADY,n
   for(const [a,c] of Object.entries({...RA,...(K.gun?GUN:{})}))R.acts[a]=R.acts[c];if(!K.pris)visor(R,K.joint);
   const r={ch:R,x,z,face:0,hp:K.hp,state:'walk',st:0,cd:rand(40,90),kx:0,kz:0,gun:K.gun,pris:K.pris,ally:K.pris?Infinity:0};R.root.position.set(x,0,z);play(R,'Walking');robots.push(r);return r}
 
-/* ---------- effects ---------- */
-const fx=[];
-function spark(x,y,z,n,col,sp=6,life=.4){const g=new THREE.SphereGeometry(.08,6,4),m=new THREE.MeshBasicMaterial({color:col});
-  for(let i=0;i<n;i++){const s=new THREE.Mesh(g,m);s.position.set(x,y,z);s.userData={v:new THREE.Vector3(rand(-sp,sp),rand(0,sp),rand(-sp,sp)),life,max:life};scene.add(s);fx.push(s)}}
-function bolt(x0,y0,z0,x1,y1,z1,col='#bfe8ff',life=.18){const pts=[],n=10;for(let i=0;i<=n;i++){const k=i/n,j=i&&i<n?.45:0;pts.push(new THREE.Vector3(x0+(x1-x0)*k+rand(-j,j),y0+(y1-y0)*k+rand(-j,j),z0+(z1-z0)*k+rand(-j,j)))}
-  const l=new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts),new THREE.LineBasicMaterial({color:col}));l.userData={life,max:life};scene.add(l);fx.push(l)}
-const glow=new THREE.PointLight('#9df',0,12);scene.add(glow);
-// power-up aura: short cyan arcs jumping between random points of the body
-const arcMat=new THREE.MeshBasicMaterial({color:CYAN});arcMat.userData.outlineParameters={visible:false};
-const AURA=['DEF-head','DEF-spine003','DEF-hips','DEF-handL','DEF-handR','DEF-shinL','DEF-shinR','DEF-upper_armL','DEF-upper_armR'].map(n=>H.bone(n));
-const auraLight=new THREE.PointLight(CYAN,0,6);scene.add(auraLight);
-function aura(){const a=AURA[Math.random()*AURA.length|0].getWorldPosition(new THREE.Vector3()).add(new THREE.Vector3(rand(-.2,.2),rand(-.2,.2),rand(-.2,.2))),pts=[a];
-  for(let i=1;i<=5;i++)pts.push(a.clone().add(new THREE.Vector3(rand(-.5,.5),rand(-.5,.5),rand(-.5,.5)).multiplyScalar(i/5)));
-  const m=new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts,false,'catmullrom',0),12,.02,4),arcMat);m.userData={life:.08,max:.08};scene.add(m);fx.push(m);
-  auraLight.position.copy(a);auraLight.intensity=4}
-function updateFx(){auraLight.intensity*=.8;for(let i=fx.length;i--;){const o=fx[i],u=o.userData;u.life-=DT;if(u.v){if(!u.ng)u.v.y-=15*DT;o.position.addScaledVector(u.v,DT);o.scale.setScalar(Math.max(.01,u.life/u.max))}
-  if(u.life<=0){scene.remove(o);o.geometry.dispose?.();fx.splice(i,1)}}glow.intensity=Math.max(0,glow.intensity-60*DT)}
-
-/* ---------- input: same actions as V1 (keyboard + gamepad); movement also on ZQSD/WASD ---------- */
-const keys={},prev={},pad={};
-const BIND={left:['arrowleft','q','a'],right:['arrowright','d'],up:['arrowup','z'],down:['arrowdown','s'],
-  attack:['j','w'],jump:['k',' '],special:['l','c'],special2:['m','v'],charge:['h','b'],power:['g'],guard:['f','shift','n'],back:['escape']};
-// gamepad, same layout as V1: A jump, B special, X attack, Y special 2, LB/RB charge, LT/RT guard, stick clicks power
-const PAD={jump:[0],special:[1],attack:[2],special2:[3],charge:[4,5],guard:[6,7],power:[10,11],back:[8]};
-addEventListener('keydown',e=>{const k=e.key.toLowerCase();if(k.startsWith('arrow')||k===' ')e.preventDefault();keys[k]=true});
-addEventListener('keyup',e=>{keys[e.key.toLowerCase()]=false});addEventListener('blur',()=>{for(const k in keys)keys[k]=false});
-const held=a=>BIND[a].some(k=>keys[k])||!!pad[a];let pressedNow={};
-function pollInput(){for(const a in BIND)pad[a]=false;
-  const g=navigator.getGamepads?[...navigator.getGamepads()].find(g=>g&&g.connected):null;
-  if(g){const b=i=>!!(g.buttons[i]&&g.buttons[i].pressed);for(const a in PAD)pad[a]=PAD[a].some(b);
-    const ax=g.axes[0]||0,ay=g.axes[1]||0;pad.left=ax<-.4||b(14);pad.right=ax>.4||b(15);pad.up=ay<-.4||b(12);pad.down=ay>.4||b(13)}
-  for(const a in BIND){const h=held(a);pressedNow[a]=h&&!prev[a];prev[a]=h}}
-const pressed=a=>pressedNow[a];
-// touch controls: virtual stick + buttons hold the same keys as the keyboard (double tap the stick = sprint)
-{const TOUCH=document.getElementById('touch'),stick=document.getElementById('stick'),vkey=(k,on)=>{keys[k]=on};
-  addEventListener('touchstart',()=>{TOUCH.style.display='block';document.body.classList.add('touch')},{once:true});
-  for(const b of TOUCH.querySelectorAll('[data-k]')){const k=b.dataset.k;
-    b.addEventListener('pointerdown',e=>{e.preventDefault();b.setPointerCapture(e.pointerId);vkey(k,true)});
-    for(const ev of['pointerup','pointercancel'])b.addEventListener(ev,()=>vkey(k,false))}
-  let sx=0,sy=0;const moveStick=e=>{const dx=e.clientX-sx,dy=e.clientY-sy,d=16;vkey('arrowleft',dx<-d);vkey('arrowright',dx>d);vkey('arrowup',dy<-d);vkey('arrowdown',dy>d)};
-  stick.addEventListener('pointerdown',e=>{e.preventDefault();stick.setPointerCapture(e.pointerId);const r=stick.getBoundingClientRect();sx=r.left+r.width/2;sy=r.top+r.height/2;moveStick(e)});
-  stick.addEventListener('pointermove',e=>{if(e.buttons||e.pointerType==='touch')moveStick(e)});
-  for(const ev of['pointerup','pointercancel'])stick.addEventListener(ev,()=>{for(const k of['arrowleft','arrowright','arrowup','arrowdown'])vkey(k,false)});
-  renderer.domElement.addEventListener('pointerdown',e=>{if(e.pointerType!=='mouse'&&(over||P.hp<=0))location.reload()})} // tap to replay
-// screen-relative directions for the isometric camera
-const RIGHT=new THREE.Vector3(1,0,-1).normalize(),UP=new THREE.Vector3(-1,0,-1).normalize();
-
-/* ---------- combat (ported from V1, distances in metres) ---------- */
-const COMBO=[{len:16,hit:6,reach:1.9,dmg:9,kb:2},{len:16,hit:6,reach:1.9,dmg:10,kb:2},{len:26,hit:9,reach:2.3,dmg:18,kb:9}];
-const CH_MIN=20,CH_FULL=60,POW_COST=25,alive=r=>r.hp>0&&!(r.ally>0);
-function hitRobots(reach,dmg,kb,arc=.9){const fx_=Math.sin(P.face),fz=Math.cos(P.face);let n=0;
-  for(const r of robots){if(!alive(r)||P.hits.has(r))continue;const dx=r.x-P.x,dz=r.z-P.z,d=Math.hypot(dx,dz);
-    if(d<reach&&(d<.6||(dx*fx_+dz*fz)/d>arc*.5)){P.hits.add(r);hurtRobot(r,dmg,dx/d||fx_,dz/d||fz,kb);n++}}return n}
-const unflash=r=>flash(r.ch,r.boss?BOSS_COL[r.state]||'#2a1a7a':r.ally>0&&!r.pris?'#5a1f8a':'#000000'); // mind-controlled robots keep a violet tint, Indigo glows his telegraph
-// src: 'p' player strike, 'c' player lightning (no link bolt), 'x' side damage (perks, allies): no gauge, no invisibility bonus
-function hurtRobot(r,dmg,nx,nz,kb,src='p'){if(r.hp<=0)return;
-  if(src!=='x'){if(P.invis>0){dmg*=2;setInvis(0)}if(P.pow>0){dmg*=1.5;kb*=1.3;chainPerk(r,dmg)}P.en=Math.min(100,P.en+6)}
-  if(src==='p')bolt(P.x,1.5,P.z,r.x,1.4,r.z);
-  r.hp-=dmg;flash(r.ch,'#ffffff');r.fl=6;spark(r.x,1.4,r.z,8,'#bfe8ff');glow.position.set(r.x,2,r.z);glow.intensity=20;shake=.15;
-  if(r.hp<=0){if(r.boss)return sealBoss(r);if(P.held===r)releaseGrab();r.state='dead';r.st=0;r.ally=0;play(r.ch,'Death',{once:true});return}
-  if(r.state==='grabbed')return; // a held robot takes the hit in place
-  if(r.boss){r.kx=nx*kb*.2;r.kz=nz*kb*.2;return} // Indigo shrugs hits off and keeps his attack going
-  r.kx=nx*kb;r.kz=nz*kb;r.state='hit';r.st=0;play(r.ch,'Hit',{once:true,speed:1.5})}
-function chainPerk(r,dmg){const o=nearestRobot(r.x,r.z,7,r);if(o){bolt(r.x,1.4,r.z,o.x,1.4,o.z,'#bfe8ff',.2);hurtRobot(o,dmg*.5,0,0,1,'x')}}
-function nearestRobot(x,z,max,not){let best=null,bd=max;for(const r of robots)if(r!==not&&alive(r)&&r.state!=='grabbed'){const d=Math.hypot(r.x-x,r.z-z);if(d<bd){bd=d;best=r}}return best}
-function hurtPlayer(dmg,nx,nz,src){if(P.inv>0||P.hp<=0)return;
-  if(P.state==='guard'&&src&&(src.x-P.x)*Math.sin(P.face)+(src.z-P.z)*Math.cos(P.face)>0){ // guarding, hit from the front
-    if(P.st<=10){P.en=Math.min(100,P.en+10);src.stun=70;src.state='walk';src.kx=-nx*4;src.kz=-nz*4;shield.material.color.set('#ffffff');glow.position.set(P.x,1.5,P.z);glow.intensity=30;shake=.15;return} // parry
-    P.hp=Math.max(1,P.hp-dmg*.2);P.kx=nx*2;P.kz=nz*2;spark(P.x+Math.sin(P.face)*.7,1.3,P.z+Math.cos(P.face)*.7,4,'#fff');return}
-  if(P.invis>0)setInvis(0);if(P.held)releaseGrab();
-  P.hp-=dmg;P.inv=40;P.kx=nx*5;P.kz=nz*5;flash(H,'#ff2222');shake=.2;spark(P.x,1.4,P.z,6,'#f55');
-  if(P.hp<=0){P.state='dead';play(H,ANIM.dead,{once:true});msg('K.O.','Entrée pour recommencer')}else if(P.state!=='cast'){P.state='hit';P.st=0;play(H,ANIM.hit,{once:true,speed:1.5})}}
-// special 1 (L): lightning from the sky on every robot around
-function storm(){if(P.en<50)return;P.en-=50;P.state='cast';P.st=0;play(H,ANIM.cast,{once:true,speed:1.4});glow.position.set(P.x,4,P.z);glow.intensity=40;shake=.3;
-  for(const r of robots)if(alive(r)&&Math.hypot(r.x-P.x,r.z-P.z)<10){bolt(r.x+rand(-1,1),14,r.z+rand(-1,1),r.x,0,r.z,'#fff7b0',.3);bolt(r.x,14,r.z,r.x,0,r.z,'#9df',.3);hurtRobot(r,28,Math.sign(r.x-P.x)||1,0,3,'c')}
-  for(let i=0;i<4;i++){const x=P.x+rand(-9,9),z=P.z+rand(-6,6);bolt(x,14,z,x,0,z,'#fff7b0',.25)}}
-// special 2 (M): charged fists for 6 s, every combo hit fires a lightning shot
-function zapFists(){if(P.en<50)return;P.en-=50;P.zap=360;P.state='cast';P.st=0;play(H,ANIM.cast,{once:true,speed:1.4});glow.position.set(P.x,2,P.z);glow.intensity=30}
-const proj=[],zapGeo=new THREE.SphereGeometry(.16,8,6),zapMat=new THREE.MeshBasicMaterial({color:'#bff8ff'});zapMat.userData.outlineParameters={visible:false};
-function shootZap(dmg){const m=new THREE.Mesh(zapGeo,zapMat);m.scale.set(1,1,2.5);const fx_=Math.sin(P.face),fz=Math.cos(P.face);
-  m.position.set(P.x+fx_*.8,1.4,P.z+fz*.8);m.rotation.y=P.face;scene.add(m);proj.push({m,vx:fx_*16,vz:fz*16,life:50,dmg})}
-function updateProj(){for(let i=proj.length;i--;){const p=proj[i],m=p.m;m.position.x+=p.vx*DT;m.position.z+=p.vz*DT;
-  const r=robots.find(r=>alive(r)&&Math.hypot(r.x-m.position.x,r.z-m.position.z)<.9);
-  if(r)hurtRobot(r,p.dmg,Math.sign(p.vx)||0,Math.sign(p.vz)||0,4,'c');
-  if(r||--p.life<=0){scene.remove(m);proj.splice(i,1)}}}
-// charged attack (hold J): chain lightning, jumps to neighbours and paralyses them
-function chainLightning(f){const fx_=Math.sin(P.face),fz=Math.cos(P.face),hand=H.bone('DEF-handR').getWorldPosition(new THREE.Vector3());
-  let src=null,best=4+(f>1?2:0);for(const r of robots)if(alive(r)){const dx=r.x-P.x,dz=r.z-P.z,d=Math.hypot(dx,dz);if(dx*fx_+dz*fz>-.5&&d<best){best=d;src=r}}
-  shake=f>1?.3:.2;glow.position.copy(hand);glow.intensity=30;
-  if(!src)return bolt(hand.x,hand.y,hand.z,hand.x+fx_*3,hand.y,hand.z+fz*3,'#bff8ff',.2);
-  const chain=[];let cur=src;while(cur&&chain.length<(f>1?4:3)){chain.push(cur);let nx=null,nb=9;for(const o of robots)if(alive(o)&&!chain.includes(o)){const d=Math.hypot(o.x-cur.x,o.z-cur.z);if(d<nb){nb=d;nx=o}}cur=nx}
-  let p0=hand;for(const r of chain){const p1=new THREE.Vector3(r.x,1.4,r.z);bolt(p0.x,p0.y,p0.z,p1.x,p1.y,p1.z,'#bff8ff',.3);p0=p1;hurtRobot(r,14*f,0,0,1,'c');if(r.hp>0)r.stun=110*f|0}}
-// G: invisibility (¼ gauge), robots lose track; the next strike does double damage
-function setInvis(on){P.invis=on?180:0;H.root.traverse(o=>{if(o.isMesh){const m=o.material;m.transparent=!!on;m.opacity=on?.3:1;m.userData.outlineParameters={visible:!on}}})}
-function power(){if(P.en<POW_COST)return;P.en-=POW_COST;setInvis(1);glow.position.set(P.x,1.5,P.z);glow.intensity=20}
-function teleport(dir){const fx_=dir.lengthSq()?dir.x:Math.sin(P.face),fz=dir.lengthSq()?dir.z:Math.cos(P.face);let best=null,bd=12;
-  for(const r of robots){if(!alive(r))continue;const dx=r.x-P.x,dz=r.z-P.z,d=Math.hypot(dx,dz);if(d<bd&&(dx*fx_+dz*fz)/d>.3){bd=d;best=r}}
-  const x0=P.x,z0=P.z;if(best){const d=Math.hypot(best.x-P.x,best.z-P.z);P.x=best.x+(best.x-P.x)/d*1.6;P.z=best.z+(best.z-P.z)/d*1.6;P.face=Math.atan2(best.x-P.x,best.z-P.z)}
-  else{P.x+=fx_*5;P.z+=fz*5}P.inv=Math.max(P.inv,12);P.state='idle';P.st=0;
-  for(const [x,z] of[[x0,z0],[P.x,P.z]]){bolt(x,12,z,x,0,z,'#9df',.2);spark(x,1,z,10,'#bfe8ff')}glow.position.set(P.x,2,P.z);glow.intensity=25}
-// grabs: walk into a robot; J knee (3rd knocks down), J+direction throw, K vault over, G mind control
-function tryGrab(dir){for(const r of robots){if(!alive(r)||r.boss||!['walk','hit'].includes(r.state))continue;const dx=r.x-P.x,dz=r.z-P.z,d=Math.hypot(dx,dz);
-  if(d<1.3&&(dx*dir.x+dz*dir.z)/d>.7){Object.assign(P,{state:'grab',st:0,held:r,knees:0,kn:0,face:Math.atan2(dx,dz)});Object.assign(r,{state:'grabbed',st:0,kx:0,kz:0});return true}}}
-function releaseGrab(){const r=P.held;P.held=null;P.grabCd=30;if(P.state==='grab')P.state='idle';if(r&&r.state==='grabbed'){r.state='walk';r.cd=15}}
-function updateGrab(dir){const r=P.held;if(P.kn>0)P.kn--;
-  if(!r||r.state!=='grabbed'||P.st>110)return releaseGrab(); // the robot breaks free
-  if(pressed('jump')){releaseGrab();r.stun=40;jump(new THREE.Vector3(Math.sin(P.face),0,Math.cos(P.face)),5);return}
-  if(pressed('power')&&P.en>=POW_COST)return mindControl(r);
-  if(!pressed('attack'))return;
-  if(dir.lengthSq()){P.held=null;P.grabCd=30;P.state='throw';P.st=0;P.face=Math.atan2(dir.x,dir.z);r.state='walk';hurtRobot(r,12,dir.x,dir.z,12);play(H,ANIM.throw,{once:true,speed:1.6});shake=.25;return}
-  P.knees++;P.kn=10;play(H,ANIM.knee,{once:true,speed:2});
-  if(P.knees>=3){P.held=null;P.grabCd=30;P.state='idle';r.state='walk';hurtRobot(r,5,Math.sin(P.face),Math.cos(P.face),8)}else hurtRobot(r,5,0,0,0)}
-function mindControl(r){P.en-=POW_COST;P.held=null;P.grabCd=30;P.state='cast';P.st=0;play(H,ANIM.cast,{once:true,speed:1.4});
-  Object.assign(r,{state:'walk',ally:480,cd:20,st:0});unflash(r);bolt(P.x,1.8,P.z,r.x,1.8,r.z,'#c6f',.3);glow.position.set(r.x,2,r.z);glow.intensity=20}
-function jump(dir,boost=0){Object.assign(P,{state:'jump',st:0,vy:11,y:.01,ja:0,at:99,jvx:dir.x*boost,jvz:dir.z*boost})}
-function startAtk(i){P.combo=i;P.state='atk';P.st=0;P.hits.clear();P.buf=false;P.hold=0;playAtk()}
-// power-up form (hold H at full gauge for 1 s): aura, harder hits that chain, static zaps
-function startForm(){Object.assign(P,{pow:600,en:0,state:'idle',st:0,inv:Math.max(P.inv,40)});shake=.4;glow.position.set(P.x,2,P.z);glow.intensity=50}
-function handArc(name){const a=H.bone(name).getWorldPosition(new THREE.Vector3()),pts=[a];for(let i=1;i<=3;i++)pts.push(a.clone().add(new THREE.Vector3(rand(-.25,.25),rand(-.25,.25),rand(-.25,.25))));
-  const m=new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts,false,'catmullrom',0),8,.015,4),arcMat);m.userData={life:.06,max:.06};scene.add(m);fx.push(m)}
-const shield=new THREE.Mesh(new THREE.CircleGeometry(.75,28),new THREE.MeshBasicMaterial({color:CYAN,transparent:true,opacity:.35,side:THREE.DoubleSide,depthWrite:false}));
-shield.material.userData.outlineParameters={visible:false};shield.visible=false;scene.add(shield);
-
-/* ---------- update ---------- */
-let shake=0,over=false,T=0,zone=0,cleared=-1,fighting=false,msgT=0,freed=0,winBroken=0;const UB=[ZONES[0].u0+.6,ZONES[0].u1-.6];
-// keep a body inside the open part of the level (the locked zone during a fight)
-function keep(o){let [u,w]=toUW(o.x,o.z);u=clamp(u,UB[0],UB[1]);w=clamp(w,-WD,WD);[o.x,o.z]=fromUW(u,w)}
-const msgEl=document.getElementById('msg');function msg(h,s=''){msgEl.innerHTML=h?`<h1>${h}</h1><div>${s}</div>`:''}
-function updatePlayer(){T++;
-  if(P.inv>0&&--P.inv===0)flash(H,'#000000');if(P.inv===30)flash(H,'#000000');
-  if(P.state==='dead'){if(pressed('attack')||keys.enter)location.reload();return}
-  const dx=(held('right')?1:0)-(held('left')?1:0),dz=(held('down')?1:0)-(held('up')?1:0);
-  const dir=new THREE.Vector3().addScaledVector(RIGHT,dx).addScaledVector(UP,-dz);if(dir.lengthSq())dir.normalize();
-  const spd=P.pow>0?7.2:6,face=()=>{if(dir.lengthSq())P.face=Math.atan2(dir.x,dir.z)};
-  P.st++;if(P.grabCd>0)P.grabCd--;if(P.invis>0&&--P.invis===0)setInvis(0);
-  if(P.kx){P.x+=P.kx*DT;P.z+=P.kz*DT;P.kx*=.85;P.kz*=.85;if(Math.abs(P.kx)+Math.abs(P.kz)<.05)P.kx=P.kz=0}
-  if(P.y>0||P.vy){P.vy-=30*DT;P.x+=P.jvx*DT;P.z+=P.jvz*DT;P.y=Math.max(0,P.y+P.vy*DT);if(P.y===0&&P.vy<0){P.vy=0;P.jvx=P.jvz=0;if(P.state==='jump')P.state='idle'}}
-  const S=P.state;
-  if(S==='idle'||S==='walk'){
-    if(P.en>=50&&pressed('special'))return storm();
-    if(P.en>=50&&pressed('special2'))return zapFists();
-    if(pressed('power'))return power();
-    if(pressed('guard')){if(dir.lengthSq())return teleport(dir);P.state='guard';P.st=0;shield.material.color.set('#ffffff');return}
-    if(held('charge')){P.state='power';P.st=0;P.pf=0;return}
-    if(pressed('jump'))return jump(dir);
-    if(pressed('attack'))return startAtk(0);
-    for(const k of['left','right','up','down'])if(pressed(k)){if(P.tapK===k&&T-P.tapT<14){P.state='dash';P.st=0;return}P.tapK=k;P.tapT=T} // double tap: sprint
-    if(dir.lengthSq()){P.x+=dir.x*spd*DT;P.z+=dir.z*spd*DT;face();P.state='walk';if(!(P.grabCd>0)&&tryGrab(dir))return}else P.state='idle';
-  }else if(S==='dash'){
-    if(!dir.lengthSq()){P.state='idle';return}
-    if(pressed('attack')){P.state='datk';P.st=0;P.hits.clear();play(H,ANIM.datk,{once:true,speed:1.3});return}
-    if(pressed('jump'))return jump(dir,6);
-    if(pressed('guard'))return teleport(dir);
-    face();P.x+=dir.x*11*DT;P.z+=dir.z*11*DT;
-  }else if(S==='datk'){ // dash attack: flying strike that sends robots far
-    if(P.st<12){const v=(12-P.st*.6);P.x+=Math.sin(P.face)*v*DT;P.z+=Math.cos(P.face)*v*DT;hitRobots(2.2,12,10)}
-    if(P.st>=22)P.state='idle';
-  }else if(S==='jump'){
-    if(dir.lengthSq()){P.x+=dir.x*5*DT;P.z+=dir.z*5*DT;face()}
-    P.at++;if(pressed('attack')&&P.at>12&&P.ja<3){P.at=0;P.ja++;P.hits.clear();play(H,ANIM.air,{once:true,fade:.05,speed:1.8})} // up to 3 air attacks per jump
-    if(P.at>=3&&P.at<10)hitRobots(2,10,5);
-  }else if(S==='atk'){const a=COMBO[P.combo];if(pressed('attack'))P.buf=true;P.hold=held('attack')?P.hold+1:0;
-    if(P.combo===0&&P.hold>=12&&P.st>=a.hit+3){P.state='hold';P.st=0;P.ch=0;play(H,ANIM.hold,{once:true});return} // held past the first jab: charge up
-    if(P.combo===2&&P.st>=a.hit+3&&pressed('jump'))return jump(dir);
-    if(P.st<a.hit)P.x+=Math.sin(P.face)*2.5*DT,P.z+=Math.cos(P.face)*2.5*DT;
-    if(P.zap>0){if(P.st===a.hit)shootZap(a.dmg)}else if(P.st>=a.hit&&P.st<a.hit+3)hitRobots(a.reach,a.dmg,a.kb);
-    if(P.st>=a.len){if(P.buf&&P.combo<2)startAtk(P.combo+1);else{P.state='idle';P.buf=false}}
-  }else if(S==='hold'){face();
-    if(!held('attack')){if(P.ch>=CH_MIN){P.state='catk';P.st=0;P.full=P.ch>=CH_FULL;play(H,ANIM.catk,{once:true,speed:1.6})}else P.state='idle';return}
-    if(++P.ch===CH_FULL){glow.position.copy(H.bone('DEF-handR').getWorldPosition(new THREE.Vector3()));glow.intensity=25;shake=.1}
-    if(P.ch%Math.max(2,8-(P.ch/10|0))===0)handArc('DEF-handR');
-  }else if(S==='catk'){if(P.st===6)chainLightning(P.full?1.5:1);if(P.st>=26)P.state='idle';}
-  else if(S==='guard'){
-    if(!held('guard'))P.state='idle';
-    else if(dir.lengthSq()&&['left','right','up','down'].some(pressed))teleport(dir);
-    else if(P.st===11)shield.material.color.set(CYAN); // end of the parry window
-  }else if(S==='power'){ // hold H: fill the gauge, keep holding at full for the power-up
-    if(!held('charge')){P.state='idle';return}
-    if(P.en>=50&&pressed('special'))return storm();
-    if(P.en>=50&&pressed('special2'))return zapFists();
-    const was=P.en;P.en=Math.min(100,P.en+.4);
-    if(was<100&&P.en>=100){shake=.15;glow.position.set(P.x,1.5,P.z);glow.intensity=30}
-    if(P.en>=100&&!(P.pow>0)&&++P.pf>=60)return startForm();
-    if(P.st%5===0)aura();
-  }else if(S==='grab')updateGrab(dir);
-  else if(S==='throw'&&P.st>=16)P.state='idle';
-  else if(S==='cast'&&P.st>30)P.state='idle';
-  else if(S==='hit'&&P.st>18)P.state='idle';
-  keep(P);
-  if(P.pow>0){P.pow--;if(P.pow%3===0)aura();
-    if(P.pow%40===0){const r=nearestRobot(P.x,P.z,10);if(r){bolt(P.x,1.6,P.z,r.x,1.4,r.z,'#bff8ff',.2);hurtRobot(r,6,0,0,1,'x')}}} // static perk
-  if(P.zap>0&&--P.zap%6===0)handArc(P.zap%12?'DEF-handL':'DEF-handR');
-  document.getElementById('pow').textContent=[P.pow>0&&'⚡ POWER-UP',P.invis>0&&'INVISIBLE',P.zap>0&&'POINGS CHARGÉS',P.state==='power'&&P.en>=100&&!(P.pow>0)&&'transformation…'].filter(Boolean).join(' · ');
-  const LOOP={idle:ANIM.idle,walk:ANIM.walk,guard:ANIM.guard,power:ANIM.charge,dash:ANIM.dash};
-  if(LOOP[P.state])play(H,LOOP[P.state]);else if(P.state==='jump'&&P.at>=14)play(H,ANIM.jump);else if(P.state==='grab'&&!P.kn)play(H,ANIM.grab);
-}
-function playAtk(){const a=COMBO[P.combo],c=H.acts[ANIM.atk[P.combo]];play(H,ANIM.atk[P.combo],{once:true,fade:.06,speed:clamp(c.getClip().duration/(a.len*DT*1.4),.8,2.5)})}
-function updateRobots(){
-  for(const r of robots){const R=r.ch;r.st++;if(r.fl>0&&--r.fl===0)unflash(r);
-    if(r.state==='dead'){if(r.blow){r.x+=r.blow[0]*7*DT;r.z+=r.blow[1]*7*DT;R.root.position.y+=(r.blow[2]-r.st*.25)*DT}else if(r.st>70)R.root.position.y-=DT*1.5;continue}
-    if(r.boss){bossAI(r);continue}
-    if(r.state==='grabbed'){r.x=P.x+Math.sin(P.face)*1.1;r.z=P.z+Math.cos(P.face)*1.1;r.face=P.face+Math.PI;play(R,'Idle');continue}
-    if(r.kx||r.kz){r.x+=r.kx*DT;r.z+=r.kz*DT;r.kx*=.88;r.kz*=.88;if(Math.abs(r.kx)+Math.abs(r.kz)<.1)r.kx=r.kz=0}
-    if(!r.pris&&Math.abs(r.kx)+Math.abs(r.kz)>4){const u=toUW(r.x,r.z)[0];if(gates.some(g=>g.beams.visible&&Math.abs(u-g.u)<1)){laserKill(r);continue}} // thrown into a live laser
-    if(r.state==='hit'){if(r.st>20){r.state='walk';play(R,'Walking')}continue}
-    if(r.stun>0){r.stun--;play(R,'Idle');if(r.stun%15===0)bolt(r.x-.3,1.8,r.z,r.x+.3,.6,r.z,'#bff8ff',.1);continue}
-    if(r.ally>0&&--r.ally===0){r.hp=0;r.state='dead';r.st=0;unflash(r);play(R,'Death',{once:true});continue} // control wears off: it collapses
-    // targets: controlled robots hunt the others; the rest hunt the player, or wander while he is invisible
-    const tgt=r.ally>0?nearestRobot(r.x,r.z,40,r):null,lost=!tgt&&P.invis>0;
-    if(lost&&(!r.wx||r.st%120===0)){r.wx=r.x+rand(-5,5);r.wz=r.z+rand(-4,4)}
-    if(r.ally>0&&!tgt){play(R,r.pris?'Dance':'Idle');continue}
-    const tx=tgt?tgt.x:lost?r.wx:P.x,tz=tgt?tgt.z:lost?r.wz:P.z,dx=tx-r.x,dz=tz-r.z,d=Math.hypot(dx,dz)||1;
-    if(r.gun&&!tgt&&!lost&&P.hp>0){r.face=Math.atan2(dx,dz); // gunner: keeps 4.5-8 m away and fires slow bolts
-      if(r.state==='shoot'){if(r.st===14)eshot(r.x,r.z,dx/d,dz/d,'#ff3040',10,6);if(r.st>45){r.state='walk';r.cd=rand(80,140)}}
-      else{r.cd--;const k=d<4.5?-1:d>8?1:0;if(k){r.x+=dx/d*k*2.2*DT;r.z+=dz/d*k*2.2*DT;play(R,'Walking')}else play(R,'Idle');
-        if(r.cd<=0&&d<11){r.state='shoot';r.st=0;play(R,'Punch',{once:true})}}
-      keep(r);continue}
-    if(r.state==='punch'){if(r.st===22&&d<2.2){if(tgt)hurtRobot(tgt,8,dx/d,dz/d,4,'x');else if(!lost&&P.y<1)hurtPlayer(8,dx/d,dz/d,r)}if(r.st>50){r.state='walk';r.cd=rand(50,100);play(R,'Walking')}continue}
-    r.face=Math.atan2(dx,dz);r.cd--;
-    if(P.hp<=0&&!tgt){play(R,'Dance');continue}
-    if(d>1.8){const v=lost?1.2:2.6;r.x+=dx/d*v*DT;r.z+=dz/d*v*DT;play(R,'Walking')}else{play(R,'Idle');if(!lost&&r.cd<=0){r.state='punch';r.st=0;play(R,'Punch',{once:true})}}
-    for(const o of robots)if(o!==r&&o.hp>0&&o.state!=='grabbed'){const ox=r.x-o.x,oz=r.z-o.z,od=Math.hypot(ox,oz);if(od<1.4&&od>0){r.x+=ox/od*.03;r.z+=oz/od*.03}}
-    keep(r)}
-  for(let i=robots.length;i--;)if(robots[i].state==='dead'&&robots[i].st>160){scene.remove(robots[i].ch.root);robots.splice(i,1)}
-}
-function updateWaves(){if(msgT>0&&--msgT===0&&!over)msg('');
-  if(over||P.hp<=0)return;const Z=ZONES[zone];
-  if(fighting){if(robots.some(alive))return;fighting=false;cleared=zone;msg('ZONE SÉCURISÉE','→');msgT=90}
-  else{const n=cleared+1,N=ZONES[n];{if(N&&!N.seen&&toUW(P.x,P.z)[0]>N.u0+4){zone=n;N.seen=1;msg(N.name,N.hint);msgT=150;
-      for(let i=robots.length;i--;)if(robots[i].pris){scene.remove(robots[i].ch.root);robots.splice(i,1)}
-      document.getElementById('wave').textContent='ZONE '+(n+1)+'/'+ZONES.length;
-      fighting=true;if(N.boss)spawnBoss(...fromUW(N.u0+14,0));else for(const [u,w,k] of N.wave)spawnRobot(...fromUW(N.u0+u,w),k)}}}
-  const L=ZONES[zone];if(fighting){UB[0]=L.u0+.6;UB[1]=L.u1-.6}else{UB[0]=ZONES[0].u0+.6;UB[1]=ZONES[Math.min(cleared+1,ZONES.length-1)].u1-.6}
-  for(const g of gates)g.beams.visible=fighting?(g.u===L.u0||g.u===L.u1):g.u===ZONES[cleared+1]?.u1}
-/* ---------- enemy shots ---------- */
-const eproj=[];
-function eshot(x,z,nx,nz,col,spd,dmg,s=.18){const m=new THREE.Mesh(new THREE.SphereGeometry(s,10,8),glowM(col));m.position.set(x+nx*.7,1.3,z+nz*.7);scene.add(m);eproj.push({m,vx:nx*spd,vz:nz*spd,life:150,dmg})}
-function updateEproj(){for(let i=eproj.length;i--;){const p=eproj[i],m=p.m;m.position.x+=p.vx*DT;m.position.z+=p.vz*DT;
-  const hit=P.hp>0&&P.y<1.5&&Math.hypot(P.x-m.position.x,P.z-m.position.z)<.7,v=Math.hypot(p.vx,p.vz);
-  if(hit)hurtPlayer(p.dmg,p.vx/v,p.vz/v,{x:m.position.x-p.vx*.05,z:m.position.z-p.vz*.05}); // src = where it came from, so the guard can block it
-  if(hit||--p.life<=0){scene.remove(m);eproj.splice(i,1)}}}
-
 /* ---------- SkyCell gadgets ---------- */
+let freed=0,winBroken=0; // prisoners released, window broken
 const WX=Math.SQRT1_2,WZ=Math.SQRT1_2,WIN=fromUW(89,-6.9); // +w (toward the open edge) in world space; window centre
-function fxMesh(geo,col,o,life,v,op=.8){const m=new THREE.Mesh(geo,noInk(new THREE.MeshBasicMaterial({color:col,transparent:true,opacity:op,depthWrite:false,side:THREE.DoubleSide})));
-  m.position.set(...o);m.userData={life,max:life,ng:1,v};scene.add(m);fx.push(m);return m}
 function streak(x,y,z,vx,vz){fxMesh(new THREE.BoxGeometry(.03,.03,.9),'#ffffff',[x,y,z],.35,new THREE.Vector3(vx,0,vz),.6).rotation.y=Math.atan2(vx,vz)}
 function ring(x,z,col,life=.9){fxMesh(new THREE.RingGeometry(1.1,1.4,32),col,[x,.06,z],life).rotation.x=-Math.PI/2}
-function kill(r){if(P.held===r)releaseGrab();r.hp=0;r.state='dead';r.st=0;r.ally=0;play(r.ch,'Death',{once:true})}
-function laserKill(r){kill(r);spark(r.x,1.2,r.z,24,'#ff3048',7,.5);bolt(r.x,2.5,r.z,r.x,0,r.z,'#ff6070',.25);glow.position.set(r.x,1.5,r.z);glow.intensity=25;shake=.25}
+function laserKill(r){kill(r);spark(r.x,1.2,r.z,24,'#ff3048',7,.5);bolt(r.x,2.5,r.z,r.x,0,r.z,'#ff6070',.25);glow.position.set(r.x,1.5,r.z);glow.intensity=25;G.shake=.25}
 function blowOff(r,dx,dz,vy){kill(r);r.blow=[dx,dz,vy];spark(r.x,1,r.z,6,'#ffffff')}
 function freePrisoners(){freed=1;for(const f of fields)f.visible=false;alarmBtn.material.color.set('#40ff70');
-  for(const u of [35.7,41.9])spawnRobot(...fromUW(u,-5.6),'p');msg('DÉTENUS LIBÉRÉS','Ils se battent à tes côtés');msgT=100;shake=.2}
+  for(const u of [35.7,41.9])spawnRobot(...fromUW(u,-5.6),'p');msg('DÉTENUS LIBÉRÉS','Ils se battent à tes côtés');G.msgT=100;G.shake=.2}
 function updateHazards(){const pu=toUW(P.x,P.z)[0];
-  if(zone===1&&fighting&&!freed&&pressed('attack')){const [cx,cz]=fromUW(39,-5.4);if(Math.hypot(P.x-cx,P.z-cz)<2)freePrisoners()}
-  if(zone===0&&fighting&&T%360<120){ // hangar gust: 2 s every 6 s toward the edge; a robot pushed to the edge goes over
+  if(G.zone===1&&G.fighting&&!freed&&pressed('attack')){const [cx,cz]=fromUW(39,-5.4);if(Math.hypot(P.x-cx,P.z-cz)<2)freePrisoners()}
+  if(G.zone===0&&G.fighting&&G.T%360<120){ // hangar gust: 2 s every 6 s toward the edge; a robot pushed to the edge goes over
     P.x+=WX*2*DT;P.z+=WZ*2*DT;
     for(const r of robots)if(alive(r)&&r.state!=='grabbed'){r.x+=WX*1.4*DT;r.z+=WZ*1.4*DT;if(toUW(r.x,r.z)[1]>WD-.2)blowOff(r,WX,WZ,0)}
     const [x,z]=fromUW(pu+rand(-12,12),rand(-7,4));streak(x,rand(.2,3),z,WX*16,WZ*16)}
   if(winBroken){ // broken window: light bodies are pulled in; robots go out, the player gets cut by the glass
     for(const o of [P,...robots.filter(r=>alive(r)&&!r.boss&&r.state!=='grabbed')]){const dx=WIN[0]-o.x,dz=WIN[1]-o.z,d=Math.hypot(dx,dz)||1,f=(o===P?1.5:3.4)*clamp(6/d,.3,2);
       o.x+=dx/d*f*DT;o.z+=dz/d*f*DT;const [u,w]=toUW(o.x,o.z);
-      if(w<-WD+.25&&Math.abs(u-89)<5.5){if(o===P){if(T%30===0)hurtPlayer(5,WX,WZ,null)}else blowOff(o,-WX,-WZ,9)}}
+      if(w<-WD+.25&&Math.abs(u-89)<5.5){if(o===P){if(G.T%30===0)hurtPlayer(5,WX,WZ,null)}else blowOff(o,-WX,-WZ,9)}}
     const [x,z]=fromUW(89+rand(-8,8),rand(-2,5)),dx=WIN[0]-x,dz=WIN[1]-z,d=Math.hypot(dx,dz);streak(x,rand(.5,3.5),z,dx/d*14,dz/d*14)}}
 
 /* ---------- boss: Indigo, mist creature that copies the heroes' powers; telegraph colour = hero copied ---------- */
 const BOSS_COL={bolt:CYAN,fire:'#ff8a2a',dash:'#a070ff',punch:'#ffffff'},mistMat=noInk(new THREE.MeshBasicMaterial({color:'#7a6cff',transparent:true,opacity:.5,depthWrite:false}));
 function spawnBoss(x,z){const R=makeChar(ual,2.6/HEADY,n=>n==='M_Joints'?'#b0a4ff':'#2c2878');for(const m of R.mats){m.transparent=true;m.opacity=.85}
-  const r={ch:R,x,z,face:-Math.PI*.75,hp:260,max:260,boss:1,state:'idle',st:0,cd:90,kx:0,kz:0};R.root.position.set(x,0,z);play(R,'Idle_Loop');robots.push(r);unflash(r);return r}
+  const r={ch:R,x,z,face:-Math.PI*.75,hp:260,max:260,boss:1,base:'#2a1a7a',state:'idle',st:0,cd:90,kx:0,kz:0};R.root.position.set(x,0,z);play(R,'Idle_Loop');robots.push(r);unflash(r);return r}
 function mist(r){const m=new THREE.Mesh(new THREE.SphereGeometry(rand(.08,.2),6,4),mistMat);m.position.set(r.x+rand(-.5,.5),rand(.3,3),r.z+rand(-.5,.5));
   m.userData={v:new THREE.Vector3(rand(-.3,.3),rand(.5,1.2),rand(-.3,.3)),ng:1,life:.9,max:.9};scene.add(m);fx.push(m)}
-function phase2(r){r.p2=1;winBroken=1;win.visible=false;spark(WIN[0],3,WIN[1],30,'#cfe0ff',8,.8);shake=.5;msg('LA VITRE CÈDE !','Le vide aspire tout ce qui est léger');msgT=120;
+function phase2(r){r.p2=1;winBroken=1;win.visible=false;spark(WIN[0],3,WIN[1],30,'#cfe0ff',8,.8);G.shake=.5;msg('LA VITRE CÈDE !','Le vide aspire tout ce qui est léger');G.msgT=120;
   for(const w of [-3,3])spawnRobot(...fromUW(clamp(toUW(r.x,r.z)[0],80,98),w))}
-function sealBoss(r){r.state='sealed';r.st=0;r.s0=r.ch.root.scale.x;over=true;winBroken=0;flash(r.ch,'#ffd36a');msg('');shake=.4;
+function sealBoss(r){r.state='sealed';r.st=0;r.s0=r.ch.root.scale.x;G.over=true;winBroken=0;flash(r.ch,'#ffd36a');msg('');G.shake=.4;
   for(const o of robots)if(o!==r&&alive(o))kill(o);for(const p of eproj)scene.remove(p.m);eproj.length=0}
 function endAtk(r){r.state='idle';r.st=0;r.cd=rand(55,95);unflash(r)}
 function bossAI(r){const R=r.ch,S=r.state;
   if(S==='sealed'){const [u,w]=toUW(r.x,r.z),k=Math.min(1,r.st/120);[r.x,r.z]=fromUW(u+(89-u)*.05,w+(-3.2-w)*.05);R.root.scale.setScalar(r.s0*(1-k*.85));R.root.position.y=k*1.4;
-    if(r.st===120){R.root.visible=false;pod.material.opacity=.6;pod.material.color.set('#c8b8ff');spark(...fromUW(89,-3.2).flatMap((v,i)=>i?[2,v]:[v]),30,'#ffd36a',5,.8);shake=.3;
+    if(r.st===120){R.root.visible=false;pod.material.opacity=.6;pod.material.color.set('#c8b8ff');spark(...fromUW(89,-3.2).flatMap((v,i)=>i?[2,v]:[v]),30,'#ffd36a',5,.8);G.shake=.3;
       msg('INDIGO CONFINÉ','Enfermé dans le métal olympien · SkyCell est sécurisé · Entrée pour rejouer')}return}
   if(r.kx||r.kz){r.x+=r.kx*DT;r.z+=r.kz*DT;r.kx*=.85;r.kz*=.85;if(Math.abs(r.kx)+Math.abs(r.kz)<.1)r.kx=r.kz=0}
   if(r.st%4===0)mist(r);if(!r.p2&&r.hp<r.max/2)phase2(r);
@@ -461,7 +125,7 @@ function bossAI(r){const R=r.ch,S=r.state;
       play(R,m==='punch'?'Punch_Cross':m==='dash'?'Sword_Idle':'Spell_Simple_Enter',{once:m==='punch'})}}
   else if(S==='bolt'){ // Thunderstruck: lightning on the marked spots
     if(r.st===40)play(R,'Spell_Simple_Shoot',{once:true});
-    if(r.st===50){shake=.3;for(const [x,z] of r.marks){bolt(x+rand(-1,1),14,z,x,0,z,'#fff7b0',.3);bolt(x,14,z,x,0,z,CYAN,.3);spark(x,.3,z,10,CYAN);
+    if(r.st===50){G.shake=.3;for(const [x,z] of r.marks){bolt(x+rand(-1,1),14,z,x,0,z,'#fff7b0',.3);bolt(x,14,z,x,0,z,CYAN,.3);spark(x,.3,z,10,CYAN);
       const e=Math.hypot(P.x-x,P.z-z);if(e<1.5&&P.y<1.5)hurtPlayer(14,(P.x-x)/(e||1),(P.z-z)/(e||1),null)}}
     if(r.st>=70)endAtk(r)}
   else if(S==='fire'){ // Hawkees: fireball (three in phase 2)
@@ -477,25 +141,8 @@ function bossAI(r){const R=r.ch,S=r.state;
   else if(S==='punch'){r.face=Math.atan2(dx,dz);if(r.st===18&&d<2.4)hurtPlayer(10,dx/d,dz/d,r);if(r.st>=40)endAtk(r)}
   keep(r)}
 
-function step(){
-  pollInput();if(pressed('back'))location.href='../index.html';
-  if(over&&keys.enter)location.reload();
-  updatePlayer();updateRobots();updateWaves();updateHazards();updateFx();updateProj();updateEproj();
-  {const B=robots.find(r=>r.boss),el=document.getElementById('boss');el.style.display=B&&B.hp>0?'block':'none';if(B)el.querySelector('i').style.width=Math.max(0,B.hp/B.max*100)+'%'}
-  shield.visible=P.state==='guard';shield.position.set(P.x+Math.sin(P.face)*.7,1.2,P.z+Math.cos(P.face)*.7);shield.rotation.y=P.face;
-  H.mixer.update(DT);for(const r of robots)r.ch.mixer.update(DT);
-  H.root.position.set(P.x,P.y,P.z);H.root.rotation.y=P.face;H.root.visible=!(P.inv>0&&P.inv<30&&(P.inv>>2)%2);
-  for(const r of robots){r.ch.root.position.x=r.x;r.ch.root.position.z=r.z;r.ch.root.rotation.y=r.face}
-  for(const c of clouds){c.position.x-=DT*1.5;if(c.position.x<-110)c.position.x=110}
-  animDecor(performance.now());
-  document.querySelector('#hp i').style.width=Math.max(0,P.hp)+'%';const en=document.querySelector('#en i');en.style.width=P.en+'%';en.style.background=P.en>=50?'#9df':'#58a';
-}
-let acc=0,last=performance.now();
-function placeCam(){const [tx,tz]=fromUW(toUW(P.x,P.z)[0],-1.4),tgt=new THREE.Vector3(tx,1.4,tz); // beat em up camera: follows along the level, fixed depth
-  cam.position.copy(tgt).add(CAM_OFF);if(shake>0){cam.position.x+=rand(-shake,shake);cam.position.y+=rand(-shake,shake);shake=Math.max(0,shake-DT)}
-  cam.lookAt(tgt);sun.position.set(P.x+8,20,P.z+6);sun.target.position.set(P.x,0,P.z)}
-function frame(now){acc+=Math.min(.1,(now-last)/1000);last=now;while(acc>=DT){step();acc-=DT}placeCam();outline.render(scene,cam);requestAnimationFrame(frame)}
-requestAnimationFrame(frame);
-window.__v2={P,H,robots,step,spawnRobot,spawnBoss,eproj,freePrisoners,get zone(){return zone},ZONES,fromUW,toUW,render:()=>{placeCam();outline.render(scene,cam)},cam}; // test hook
+start({ZONES,gates,spawn:spawnRobot,spawnBoss,bossAI,bossDown:sealBoss,BOSS_COL,bossName:'INDIGO',bossColor:['#a99cff','#7a6cff'],
+  onKnock:r=>{if(r.pris)return false;const u=toUW(r.x,r.z)[0];if(gates.some(g=>g.beams.visible&&Math.abs(u-g.u)<1)){laserKill(r);return true}}, // thrown into a live laser
+  update:t=>{updateHazards();animDecor(t);for(const c of clouds){c.position.x-=DT*1.5;if(c.position.x<-110)c.position.x=110}}});
 </script>
 </body></html>

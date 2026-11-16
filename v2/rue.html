@@ -1,88 +1,27 @@
 <!doctype html>
 <html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Mythic Brawl V2 · Rue de nuit</title>
-<style>
-  html,body{margin:0;height:100%;overflow:hidden;background:#1a2350;font-family:system-ui,sans-serif;color:#fff;user-select:none}
-  canvas{display:block}
-  #hud{position:fixed;left:16px;top:12px;width:260px;pointer-events:none;text-shadow:0 1px 2px #000}
-  #hud b{font-size:18px;letter-spacing:1px;color:#9df}
-  .bar{height:12px;background:#300;border:2px solid #000;margin-top:4px}.bar i{display:block;height:100%;background:#3d3;transition:width .1s}
-  #en{height:7px}#en i{background:#58a}
-  #wave{position:fixed;right:16px;top:12px;text-align:right;font-weight:bold;text-shadow:0 1px 2px #000}
-  #msg{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;text-align:center;pointer-events:none;text-shadow:0 2px 4px #000}
-  #msg h1{margin:0;font-size:clamp(28px,6vw,56px);color:#ffe14d}
-  #help{position:fixed;left:0;right:0;bottom:8px;text-align:center;font-size:12px;color:#ccd;text-shadow:0 1px 2px #000;pointer-events:none;padding:0 16px}
-  #back{position:fixed;right:16px;bottom:8px;color:#aab;font-size:12px}
-  #touch{position:fixed;inset:0;pointer-events:none;display:none;-webkit-user-select:none;-webkit-touch-callout:none}
-  #touch div{pointer-events:auto;touch-action:none;position:absolute;border-radius:50%;background:rgba(255,255,255,.12);border:2px solid rgba(255,255,255,.35);
-    color:rgba(255,255,255,.85);font:bold 11px system-ui,sans-serif;display:flex;align-items:center;justify-content:center;width:58px;height:58px}
-  #touch div:active{background:rgba(255,255,255,.3)}
-  body.touch #help,body.touch #back{display:none}
-  #load{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;font-size:18px;background:#0a0820}
-</style>
 <script src="models/ual1.js"></script>
+<script src="engine.js"></script>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
-</head><body>
-<div id="hud"><b>THUNDERSTRUCK</b> <span id="pow" style="color:#3ef0ff;font-weight:bold"></span><div class="bar" id="hp"><i style="width:100%"></i></div><div class="bar" id="en"><i style="width:0"></i></div></div>
-<div id="boss" style="position:fixed;left:50%;top:12px;width:min(320px,60vw);transform:translateX(-50%);display:none;text-align:center;text-shadow:0 1px 2px #000"><b style="color:#ff6a50;letter-spacing:2px">THE BEAST</b><div class="bar"><i style="width:100%;background:#e0301a"></i></div></div><div id="wave"></div><div id="msg"></div>
-<div id="help">ZQSD/flèches : bouger (2× : sprint) · J : frapper (maintenir : coup chargé) · K/Espace : sauter · L : tempête · M : poings chargés · H maintenu : charger l'énergie (pleine + 1 s : power-up) · G : invisible · F/Maj : garde (+direction : téléport) · contre un robot : saisie (J, J+dir, K, G) · manette OK · Échap : menu</div>
-<div id="touch"><!-- shown on first touch; each button holds the keyboard key of BIND -->
-  <div id="stick" style="left:18px;bottom:18px;width:130px;height:130px">◀ ▲ ▼ ▶</div>
-  <div data-k="j" style="right:84px;bottom:16px;width:66px;height:66px">FRAPPE</div>
-  <div data-k="k" style="right:14px;bottom:66px">SAUT</div>
-  <div data-k="f" style="right:160px;bottom:16px">GARDE</div>
-  <div data-k="l" style="right:160px;bottom:88px">TEMPÊTE</div>
-  <div data-k="m" style="right:88px;bottom:94px">POINGS</div>
-  <div data-k="h" style="right:14px;bottom:138px">CHARGE</div>
-  <div data-k="g" style="right:88px;bottom:166px">INVISIBLE</div>
-  <div data-k="escape" style="right:16px;top:40px;width:60px;height:30px;border-radius:8px">MENU</div>
-</div>
-<a id="back" href="../index.html">← Menu</a>
-<div id="load">Chargement des modèles 3D…</div>
+</head><body style="margin:0;background:#0a0820">
+<div id="load" style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;font:18px system-ui,sans-serif;color:#fff;background:#0a0820">Chargement des modèles 3D…</div>
 <script type="module">
-// V2 prototype: same game ideas as V1 (x = right, z = depth, y = up), rendered in 3D with toon shading + outlines, isometric camera.
-// Hero: Quaternius Universal Animation Library mannequin (CC0, models/ual1.js). Street gang and The Beast are the same mannequin repainted (rue.html is a copy of the SkyCell engine).
+// Level 1, Rue de nuit (Steel City): street gang, boss The Beast. Engine: engine.js.
 import * as THREE from 'three';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 import {OutlineEffect} from 'three/addons/effects/OutlineEffect.js';
+const {DT,rand,scene,hemi,sun,toon,S2,toUW,fromUW,WD,LV,noInk,glowM,fieldM,lb,lc,ual,HEADY,makeChar,play,flash,CYAN,P,H,robots,fx,spark,bolt,glow,fxMesh,kill,hurtRobot,hurtPlayer,alive,unflash,keep,msg,G,UB,start}=await MBEngine({THREE,GLTFLoader,SkeletonUtils,OutlineEffect});
 
-const DT=1/60,VIEW=6.6;
-const rand=(a,b)=>a+Math.random()*(b-a),clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
-
-/* ---------- renderer, camera, lights ---------- */
-const renderer=new THREE.WebGLRenderer({antialias:true,preserveDrawingBuffer:true});
-renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
-document.body.prepend(renderer.domElement);
-const outline=new OutlineEffect(renderer,{defaultThickness:.006,defaultColor:[0,0,0]});
-const scene=new THREE.Scene();scene.background=new THREE.Color('#0b1030');scene.fog=new THREE.Fog('#0b1030',50,100);
-const cam=new THREE.OrthographicCamera(-1,1,1,-1,-100,300);const CAM_OFF=new THREE.Vector3(18,15,18);
-// portrait: zoom out to keep the width
-function resize(){const a=innerWidth/innerHeight,v=VIEW*Math.max(1,.9/a);Object.assign(cam,{left:-v*a,right:v*a,top:v,bottom:-v});cam.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight)}
-addEventListener('resize',resize);resize();
-scene.add(new THREE.HemisphereLight('#7a88d8','#1a1430',.9));
-const sun=new THREE.DirectionalLight('#b8c8ff',1.3);sun.position.set(8,20,6);sun.castShadow=true;sun.shadow.mapSize.set(2048,2048);
-Object.assign(sun.shadow.camera,{left:-20,right:20,top:20,bottom:-20,near:1,far:60});scene.add(sun,sun.target);
-
-// toon shading: 3 flat light bands
-const grad=new THREE.DataTexture(new Uint8Array([90,90,90,255,175,175,175,255,255,255,255,255]),3,1);grad.minFilter=grad.magFilter=THREE.NearestFilter;grad.needsUpdate=true;
-const toon=(color,o={})=>new THREE.MeshToonMaterial({color,gradientMap:grad,...o});
-const box=(w,h,d,mat,x,y,z)=>{const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);m.position.set(x,y,z);m.castShadow=m.receiveShadow=true;scene.add(m);return m};
-
+// night: darker sky and moonlight
+scene.background.set('#0b1030');scene.fog.color.set('#0b1030');scene.fog.near=50;scene.fog.far=100;hemi.color.set('#7a88d8');hemi.groundColor.set('#1a1430');hemi.intensity=.9;sun.color.set('#b8c8ff');sun.intensity=1.3;
 /* ---------- Rue de nuit (Steel City): 4 zones along the screen-right axis ---------- */
-// Level frame: u runs to the right of the screen, w toward the camera. The LV group is turned 45° so its local x = u, local z = w.
-const S2=Math.SQRT2,toUW=(x,z)=>[(x-z)/S2,(x+z)/S2],fromUW=(u,w)=>[(u+w)/S2,(w-u)/S2],WD=5.2;
 const ZONES=[
   {u0:0,u1:26,name:'AVENUE',hint:'J : combo · F : garde (au dernier moment : parade)',wave:[[14,-3,'v'],[18,3,'v']]},
   {u0:26,u1:52,name:'RUELLE',hint:'Ils arrivent des deux côtés · Casse les poubelles : soin',wave:[[16,-3,'v'],[20,2,'p'],[1.5,3,'v'],[2,-3,'p']]},
   {u0:52,u1:78,name:'CHANTIER',hint:'Frappe un bidon pour le lancer · La foudre électrise les flaques',wave:[[16,0,'b'],[12,-4,'p'],[20,4,'p'],[2,0,'v']]},
-  {u0:78,u1:96,name:'ENTREPÔT HAZARD',hint:'The Beast fonce tout droit : esquive, il s’assomme contre les murs',boss:1}]; // u1 grows to 112 when he breaks in
-const LV=new THREE.Group();LV.rotation.y=Math.PI/4;scene.add(LV);
-const noInk=m=>(m.userData.outlineParameters={visible:false},m);
-const glowM=c=>noInk(new THREE.MeshBasicMaterial({color:c}));
-const fieldM=(c,o)=>noInk(new THREE.MeshBasicMaterial({color:c,transparent:true,opacity:o,blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide}));
-const lb=(w,h,d,mat,x,y,z)=>{const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);m.position.set(x,y,z);m.castShadow=m.receiveShadow=true;LV.add(m);return m};
-const lc=(r,h,mat,x,y,z,o={})=>{const m=new THREE.Mesh(new THREE.CylinderGeometry(o.r2??r,r,h,o.seg||24,1,!!o.open),mat);m.position.set(x,y,z);m.castShadow=m.receiveShadow=!o.noShadow;LV.add(m);return m};
+  {u0:78,u1:96,name:'ENTREPÔG.T HAZARD',hint:'The Beast fonce tout droit : esquive, il s’assomme contre les murs',boss:1}]; // u1 grows to 112 when he breaks in
 const canvasTex=(w,h,draw,rx=1,ry=1)=>{const c=document.createElement('canvas');c.width=w;c.height=h;draw(c.getContext('2d'));const t=new THREE.CanvasTexture(c);t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.set(rx,ry);t.colorSpace=THREE.SRGBColorSpace;return t};
 // wet asphalt: speckles + bluish sheen patches
 const asphalt=canvasTex(256,256,g=>{g.fillStyle='#2b2e3a';g.fillRect(0,0,256,256);for(let i=0;i<900;i++){g.fillStyle=Math.random()<.5?'#33374a':'#24262f';g.fillRect(Math.random()*256,Math.random()*256,2,2)}
@@ -132,36 +71,7 @@ for(const w of [-5.8,5.8])for(const u of [100,106,112])lb(.6,8,.6,steel,u,4,w);
 const STEAM=[[10,-2],[44,1],[68,3],[88,-1]].map(([u,w])=>{lc(.5,.03,dark,u,.02,w);return fromUW(u,w)});
 function animDecor(t){neon.forEach((n,i)=>n.visible=i!==1||(t/90|0)%13!==0)} // one sign flickers
 
-/* ---------- characters ---------- */
-const loader=new GLTFLoader();
-const ual=await new Promise((ok,ko)=>loader.parse(Uint8Array.from(atob(window.UAL1),c=>c.charCodeAt(0)).buffer,'',ok,ko));
-document.getElementById('load').remove();
-function makeChar(gltf,scale,colorOf){
-  const root=SkeletonUtils.clone(gltf.scene),mats=[];root.scale.setScalar(scale);
-  root.traverse(o=>{if(o.isMesh){o.castShadow=true;o.frustumCulled=false;const m=toon(colorOf(o.material.name,o.material.color));m.skinning=true;o.material=m;mats.push(m)}});
-  scene.add(root);const mixer=new THREE.AnimationMixer(root),acts={};for(const c of gltf.animations)acts[c.name]=mixer.clipAction(c);
-  return{root,mixer,acts,mats,cur:null,bone:n=>root.getObjectByName(n)};
-}
-function play(ch,name,{once=false,fade=.12,speed=1}={}){const a=ch.acts[name];if(!a||(ch.cur===a&&!once))return;
-  a.reset();a.setLoop(once?THREE.LoopOnce:THREE.LoopRepeat,Infinity);a.clampWhenFinished=once;a.timeScale=speed;a.fadeIn(fade).play();
-  if(ch.cur&&ch.cur!==a)ch.cur.fadeOut(fade);ch.cur=a}
-function flash(ch,col){for(const m of ch.mats)m.emissive.set(col)}
 
-// hero: Thunderstruck, "Tempête" costume (black suit, cyan joints, chest bolt, visor). Bone names lose their dots in three.js.
-const CYAN='#3ef0ff';ual.scene.updateMatrixWorld(true);
-const HEADY=ual.scene.getObjectByName('DEF-head').getWorldPosition(new THREE.Vector3()).y,H=makeChar(ual,2.05/HEADY,n=>n==='M_Joints'?CYAN:'#1b1d2a');
-{const fwd=new THREE.Vector3(0,0,1),k=H.root.scale.x;H.root.updateMatrixWorld(true);const wp=n=>H.bone(n).getWorldPosition(new THREE.Vector3());
-  const stick=(mesh,b,pos)=>{mesh.position.copy(pos);mesh.lookAt(pos.clone().add(fwd));mesh.castShadow=true;scene.add(mesh);H.bone(b).attach(mesh)};
-  const sh=new THREE.Shape([[0,.11],[-.05,0],[0,0],[-.03,-.11],[.06,.02],[.01,.02],[.04,.11]].map(p=>new THREE.Vector2(...p)));
-  stick(new THREE.Mesh(new THREE.ExtrudeGeometry(sh,{depth:.02,bevelEnabled:false}).scale(k,k,k),toon(CYAN,{emissive:CYAN,emissiveIntensity:.35})),'DEF-spine003',wp('DEF-spine003').addScaledVector(fwd,.13*k).add(new THREE.Vector3(0,.02*k,0)));
-  stick(new THREE.Mesh(new THREE.BoxGeometry(.2*k,.05*k,.06*k),toon('#0e1a22')),'DEF-head',wp('DEF-head').addScaledVector(fwd,.1*k).add(new THREE.Vector3(0,.09*k,0)))}
-// clip per state; attack clips are time-scaled to fit the combo timings
-const ANIM={idle:'Idle_Loop',walk:'Jog_Fwd_Loop',jump:'Jump_Loop',cast:'Spell_Simple_Shoot',hit:'Hit_Chest',dead:'Death01',atk:['Punch_Jab','Punch_Cross','Sword_Attack'],
-  guard:'Spell_Simple_Idle_Loop',charge:'Crouch_Idle_Loop',hold:'Punch_Enter',catk:'Spell_Simple_Shoot',dash:'Sprint_Loop',datk:'Punch_Cross',air:'Punch_Jab',grab:'Push_Loop',knee:'Punch_Jab',throw:'Sword_Attack'};
-const P={x:-18,z:0,y:0,vy:0,face:0,hp:100,en:0,state:'idle',st:0,combo:0,buf:false,inv:0,hits:new Set(),pow:0,invis:0,zap:0,held:null,grabCd:0,ja:0,at:99,jvx:0,jvz:0,hold:0,ch:0,pf:0,tapK:null,tapT:-99};
-[P.x,P.z]=fromUW(3,0);P.face=Math.PI*.75;H.root.position.set(P.x,0,P.z);play(H,ANIM.idle);
-
-const robots=[];
 // street gang: v thug (hoodie), p punk (mohawk, fast), b brute (bulked, heavy). Mannequin repainted per vertex like Hawkees.
 const SKIN='#e0ac7e',V3=()=>new THREE.Vector3(),pick=a=>a[Math.random()*a.length|0];
 function dress(R,L){const m=R.root;m.updateMatrixWorld(true);const meshes=[];m.traverse(o=>{if(o.isSkinnedMesh)meshes.push(o)});
@@ -194,238 +104,7 @@ function spawnRobot(x,z,kind='v'){const K=GANG[kind],R=makeChar(ual,(K.h||1.85)/
   for(const [a,c] of Object.entries(RA))R.acts[a]=R.acts[c];
   const r={ch:R,x,z,face:0,hp:K.hp,state:'walk',st:0,cd:rand(40,90),kx:0,kz:0,spd:K.spd,dmg:K.dmg,heavy:K.heavy};R.root.position.set(x,0,z);play(R,'Walking');robots.push(r);return r}
 
-/* ---------- effects ---------- */
-const fx=[];
-function spark(x,y,z,n,col,sp=6,life=.4){const g=new THREE.SphereGeometry(.08,6,4),m=new THREE.MeshBasicMaterial({color:col});
-  for(let i=0;i<n;i++){const s=new THREE.Mesh(g,m);s.position.set(x,y,z);s.userData={v:new THREE.Vector3(rand(-sp,sp),rand(0,sp),rand(-sp,sp)),life,max:life};scene.add(s);fx.push(s)}}
-function bolt(x0,y0,z0,x1,y1,z1,col='#bfe8ff',life=.18){const pts=[],n=10;for(let i=0;i<=n;i++){const k=i/n,j=i&&i<n?.45:0;pts.push(new THREE.Vector3(x0+(x1-x0)*k+rand(-j,j),y0+(y1-y0)*k+rand(-j,j),z0+(z1-z0)*k+rand(-j,j)))}
-  const l=new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts),new THREE.LineBasicMaterial({color:col}));l.userData={life,max:life};scene.add(l);fx.push(l)}
-const glow=new THREE.PointLight('#9df',0,12);scene.add(glow);
-// power-up aura: short cyan arcs jumping between random points of the body
-const arcMat=new THREE.MeshBasicMaterial({color:CYAN});arcMat.userData.outlineParameters={visible:false};
-const AURA=['DEF-head','DEF-spine003','DEF-hips','DEF-handL','DEF-handR','DEF-shinL','DEF-shinR','DEF-upper_armL','DEF-upper_armR'].map(n=>H.bone(n));
-const auraLight=new THREE.PointLight(CYAN,0,6);scene.add(auraLight);
-function aura(){const a=AURA[Math.random()*AURA.length|0].getWorldPosition(new THREE.Vector3()).add(new THREE.Vector3(rand(-.2,.2),rand(-.2,.2),rand(-.2,.2))),pts=[a];
-  for(let i=1;i<=5;i++)pts.push(a.clone().add(new THREE.Vector3(rand(-.5,.5),rand(-.5,.5),rand(-.5,.5)).multiplyScalar(i/5)));
-  const m=new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts,false,'catmullrom',0),12,.02,4),arcMat);m.userData={life:.08,max:.08};scene.add(m);fx.push(m);
-  auraLight.position.copy(a);auraLight.intensity=4}
-function updateFx(){auraLight.intensity*=.8;for(let i=fx.length;i--;){const o=fx[i],u=o.userData;u.life-=DT;if(u.v){if(!u.ng)u.v.y-=15*DT;o.position.addScaledVector(u.v,DT);o.scale.setScalar(Math.max(.01,u.life/u.max))}
-  if(u.life<=0){scene.remove(o);o.geometry.dispose?.();fx.splice(i,1)}}glow.intensity=Math.max(0,glow.intensity-60*DT)}
-
-/* ---------- input: same actions as V1 (keyboard + gamepad); movement also on ZQSD/WASD ---------- */
-const keys={},prev={},pad={};
-const BIND={left:['arrowleft','q','a'],right:['arrowright','d'],up:['arrowup','z'],down:['arrowdown','s'],
-  attack:['j','w'],jump:['k',' '],special:['l','c'],special2:['m','v'],charge:['h','b'],power:['g'],guard:['f','shift','n'],back:['escape']};
-// gamepad, same layout as V1: A jump, B special, X attack, Y special 2, LB/RB charge, LT/RT guard, stick clicks power
-const PAD={jump:[0],special:[1],attack:[2],special2:[3],charge:[4,5],guard:[6,7],power:[10,11],back:[8]};
-addEventListener('keydown',e=>{const k=e.key.toLowerCase();if(k.startsWith('arrow')||k===' ')e.preventDefault();keys[k]=true});
-addEventListener('keyup',e=>{keys[e.key.toLowerCase()]=false});addEventListener('blur',()=>{for(const k in keys)keys[k]=false});
-const held=a=>BIND[a].some(k=>keys[k])||!!pad[a];let pressedNow={};
-function pollInput(){for(const a in BIND)pad[a]=false;
-  const g=navigator.getGamepads?[...navigator.getGamepads()].find(g=>g&&g.connected):null;
-  if(g){const b=i=>!!(g.buttons[i]&&g.buttons[i].pressed);for(const a in PAD)pad[a]=PAD[a].some(b);
-    const ax=g.axes[0]||0,ay=g.axes[1]||0;pad.left=ax<-.4||b(14);pad.right=ax>.4||b(15);pad.up=ay<-.4||b(12);pad.down=ay>.4||b(13)}
-  for(const a in BIND){const h=held(a);pressedNow[a]=h&&!prev[a];prev[a]=h}}
-const pressed=a=>pressedNow[a];
-// touch controls: virtual stick + buttons hold the same keys as the keyboard (double tap the stick = sprint)
-{const TOUCH=document.getElementById('touch'),stick=document.getElementById('stick'),vkey=(k,on)=>{keys[k]=on};
-  addEventListener('touchstart',()=>{TOUCH.style.display='block';document.body.classList.add('touch')},{once:true});
-  for(const b of TOUCH.querySelectorAll('[data-k]')){const k=b.dataset.k;
-    b.addEventListener('pointerdown',e=>{e.preventDefault();b.setPointerCapture(e.pointerId);vkey(k,true)});
-    for(const ev of['pointerup','pointercancel'])b.addEventListener(ev,()=>vkey(k,false))}
-  let sx=0,sy=0;const moveStick=e=>{const dx=e.clientX-sx,dy=e.clientY-sy,d=16;vkey('arrowleft',dx<-d);vkey('arrowright',dx>d);vkey('arrowup',dy<-d);vkey('arrowdown',dy>d)};
-  stick.addEventListener('pointerdown',e=>{e.preventDefault();stick.setPointerCapture(e.pointerId);const r=stick.getBoundingClientRect();sx=r.left+r.width/2;sy=r.top+r.height/2;moveStick(e)});
-  stick.addEventListener('pointermove',e=>{if(e.buttons||e.pointerType==='touch')moveStick(e)});
-  for(const ev of['pointerup','pointercancel'])stick.addEventListener(ev,()=>{for(const k of['arrowleft','arrowright','arrowup','arrowdown'])vkey(k,false)});
-  renderer.domElement.addEventListener('pointerdown',e=>{if(e.pointerType!=='mouse'&&(over||P.hp<=0))location.reload()})} // tap to replay
-// screen-relative directions for the isometric camera
-const RIGHT=new THREE.Vector3(1,0,-1).normalize(),UP=new THREE.Vector3(-1,0,-1).normalize();
-
-/* ---------- combat (ported from V1, distances in metres) ---------- */
-const COMBO=[{len:16,hit:6,reach:1.9,dmg:9,kb:2},{len:16,hit:6,reach:1.9,dmg:10,kb:2},{len:26,hit:9,reach:2.3,dmg:18,kb:9}];
-const CH_MIN=20,CH_FULL=60,POW_COST=25,alive=r=>r.hp>0&&!(r.ally>0);
-function hitRobots(reach,dmg,kb,arc=.9){const fx_=Math.sin(P.face),fz=Math.cos(P.face);let n=0;
-  for(const r of robots){if(!alive(r)||P.hits.has(r))continue;const dx=r.x-P.x,dz=r.z-P.z,d=Math.hypot(dx,dz);
-    if(d<reach&&(d<.6||(dx*fx_+dz*fz)/d>arc*.5)){P.hits.add(r);hurtRobot(r,dmg,dx/d||fx_,dz/d||fz,kb);n++}}hitProps(reach,fx_,fz);return n}
-const unflash=r=>flash(r.ch,r.boss?BOSS_COL[r.state]||r.base:r.ally>0&&!r.pris?'#5a1f8a':'#000000'); // mind-controlled thugs keep a violet tint, the boss glows his telegraph
-// src: 'p' player strike, 'c' player lightning (no link bolt), 'x' side damage (perks, allies): no gauge, no invisibility bonus
-function hurtRobot(r,dmg,nx,nz,kb,src='p'){if(r.hp<=0)return;if(src==='c')zapPuddles(r.x,r.z);
-  if(src!=='x'){if(P.invis>0){dmg*=2;setInvis(0)}if(P.pow>0){dmg*=1.5;kb*=1.3;chainPerk(r,dmg)}P.en=Math.min(100,P.en+6)}
-  if(src==='p')bolt(P.x,1.5,P.z,r.x,1.4,r.z);
-  if(r.boss)dmg*=r.state==='stunned'?1.5:.6;r.hp-=dmg;flash(r.ch,'#ffffff');r.fl=6;spark(r.x,1.4,r.z,8,'#bfe8ff');glow.position.set(r.x,2,r.z);glow.intensity=20;shake=.15;
-  if(r.hp<=0){if(r.boss)return bossDown(r);if(P.held===r)releaseGrab();r.state='dead';r.st=0;r.ally=0;play(r.ch,'Death',{once:true});return}
-  if(r.state==='grabbed')return; // a held robot takes the hit in place
-  if(r.boss){r.kx=nx*kb*.2;r.kz=nz*kb*.2;return} // the boss shrugs hits off and keeps his attack going
-  if(r.heavy)kb*=.35;r.kx=nx*kb;r.kz=nz*kb;r.state='hit';r.st=0;play(r.ch,'Hit',{once:true,speed:1.5})}
-function chainPerk(r,dmg){const o=nearestRobot(r.x,r.z,7,r);if(o){bolt(r.x,1.4,r.z,o.x,1.4,o.z,'#bfe8ff',.2);hurtRobot(o,dmg*.5,0,0,1,'x')}}
-function nearestRobot(x,z,max,not){let best=null,bd=max;for(const r of robots)if(r!==not&&alive(r)&&r.state!=='grabbed'){const d=Math.hypot(r.x-x,r.z-z);if(d<bd){bd=d;best=r}}return best}
-function hurtPlayer(dmg,nx,nz,src){if(P.inv>0||P.hp<=0)return;
-  if(P.state==='guard'&&src&&(src.x-P.x)*Math.sin(P.face)+(src.z-P.z)*Math.cos(P.face)>0){ // guarding, hit from the front
-    if(P.st<=10){P.en=Math.min(100,P.en+10);src.stun=70;src.state='walk';src.kx=-nx*4;src.kz=-nz*4;shield.material.color.set('#ffffff');glow.position.set(P.x,1.5,P.z);glow.intensity=30;shake=.15;return} // parry
-    P.hp=Math.max(1,P.hp-dmg*.2);P.kx=nx*2;P.kz=nz*2;spark(P.x+Math.sin(P.face)*.7,1.3,P.z+Math.cos(P.face)*.7,4,'#fff');return}
-  if(P.invis>0)setInvis(0);if(P.held)releaseGrab();
-  P.hp-=dmg;P.inv=40;P.kx=nx*5;P.kz=nz*5;flash(H,'#ff2222');shake=.2;spark(P.x,1.4,P.z,6,'#f55');
-  if(P.hp<=0){P.state='dead';play(H,ANIM.dead,{once:true});msg('K.O.','Entrée pour recommencer')}else if(P.state!=='cast'){P.state='hit';P.st=0;play(H,ANIM.hit,{once:true,speed:1.5})}}
-// special 1 (L): lightning from the sky on every robot around
-function storm(){if(P.en<50)return;P.en-=50;P.state='cast';P.st=0;play(H,ANIM.cast,{once:true,speed:1.4});glow.position.set(P.x,4,P.z);glow.intensity=40;shake=.3;
-  for(const r of robots)if(alive(r)&&Math.hypot(r.x-P.x,r.z-P.z)<10){bolt(r.x+rand(-1,1),14,r.z+rand(-1,1),r.x,0,r.z,'#fff7b0',.3);bolt(r.x,14,r.z,r.x,0,r.z,'#9df',.3);hurtRobot(r,28,Math.sign(r.x-P.x)||1,0,3,'c')}
-  for(let i=0;i<4;i++){const x=P.x+rand(-9,9),z=P.z+rand(-6,6);bolt(x,14,z,x,0,z,'#fff7b0',.25)}}
-// special 2 (M): charged fists for 6 s, every combo hit fires a lightning shot
-function zapFists(){if(P.en<50)return;P.en-=50;P.zap=360;P.state='cast';P.st=0;play(H,ANIM.cast,{once:true,speed:1.4});glow.position.set(P.x,2,P.z);glow.intensity=30}
-const proj=[],zapGeo=new THREE.SphereGeometry(.16,8,6),zapMat=new THREE.MeshBasicMaterial({color:'#bff8ff'});zapMat.userData.outlineParameters={visible:false};
-function shootZap(dmg){const m=new THREE.Mesh(zapGeo,zapMat);m.scale.set(1,1,2.5);const fx_=Math.sin(P.face),fz=Math.cos(P.face);
-  m.position.set(P.x+fx_*.8,1.4,P.z+fz*.8);m.rotation.y=P.face;scene.add(m);proj.push({m,vx:fx_*16,vz:fz*16,life:50,dmg})}
-function updateProj(){for(let i=proj.length;i--;){const p=proj[i],m=p.m;m.position.x+=p.vx*DT;m.position.z+=p.vz*DT;
-  const r=robots.find(r=>alive(r)&&Math.hypot(r.x-m.position.x,r.z-m.position.z)<.9);
-  if(r)hurtRobot(r,p.dmg,Math.sign(p.vx)||0,Math.sign(p.vz)||0,4,'c');
-  if(r||--p.life<=0){scene.remove(m);proj.splice(i,1)}}}
-// charged attack (hold J): chain lightning, jumps to neighbours and paralyses them
-function chainLightning(f){const fx_=Math.sin(P.face),fz=Math.cos(P.face),hand=H.bone('DEF-handR').getWorldPosition(new THREE.Vector3());
-  let src=null,best=4+(f>1?2:0);for(const r of robots)if(alive(r)){const dx=r.x-P.x,dz=r.z-P.z,d=Math.hypot(dx,dz);if(dx*fx_+dz*fz>-.5&&d<best){best=d;src=r}}
-  shake=f>1?.3:.2;glow.position.copy(hand);glow.intensity=30;
-  if(!src)return bolt(hand.x,hand.y,hand.z,hand.x+fx_*3,hand.y,hand.z+fz*3,'#bff8ff',.2);
-  const chain=[];let cur=src;while(cur&&chain.length<(f>1?4:3)){chain.push(cur);let nx=null,nb=9;for(const o of robots)if(alive(o)&&!chain.includes(o)){const d=Math.hypot(o.x-cur.x,o.z-cur.z);if(d<nb){nb=d;nx=o}}cur=nx}
-  let p0=hand;for(const r of chain){const p1=new THREE.Vector3(r.x,1.4,r.z);bolt(p0.x,p0.y,p0.z,p1.x,p1.y,p1.z,'#bff8ff',.3);p0=p1;hurtRobot(r,14*f,0,0,1,'c');if(r.hp>0)r.stun=110*f|0}}
-// G: invisibility (¼ gauge), robots lose track; the next strike does double damage
-function setInvis(on){P.invis=on?180:0;H.root.traverse(o=>{if(o.isMesh){const m=o.material;m.transparent=!!on;m.opacity=on?.3:1;m.userData.outlineParameters={visible:!on}}})}
-function power(){if(P.en<POW_COST)return;P.en-=POW_COST;setInvis(1);glow.position.set(P.x,1.5,P.z);glow.intensity=20}
-function teleport(dir){const fx_=dir.lengthSq()?dir.x:Math.sin(P.face),fz=dir.lengthSq()?dir.z:Math.cos(P.face);let best=null,bd=12;
-  for(const r of robots){if(!alive(r))continue;const dx=r.x-P.x,dz=r.z-P.z,d=Math.hypot(dx,dz);if(d<bd&&(dx*fx_+dz*fz)/d>.3){bd=d;best=r}}
-  const x0=P.x,z0=P.z;if(best){const d=Math.hypot(best.x-P.x,best.z-P.z);P.x=best.x+(best.x-P.x)/d*1.6;P.z=best.z+(best.z-P.z)/d*1.6;P.face=Math.atan2(best.x-P.x,best.z-P.z)}
-  else{P.x+=fx_*5;P.z+=fz*5}P.inv=Math.max(P.inv,12);P.state='idle';P.st=0;
-  for(const [x,z] of[[x0,z0],[P.x,P.z]]){bolt(x,12,z,x,0,z,'#9df',.2);spark(x,1,z,10,'#bfe8ff')}glow.position.set(P.x,2,P.z);glow.intensity=25}
-// grabs: walk into a robot; J knee (3rd knocks down), J+direction throw, K vault over, G mind control
-function tryGrab(dir){for(const r of robots){if(!alive(r)||r.boss||!['walk','hit'].includes(r.state))continue;const dx=r.x-P.x,dz=r.z-P.z,d=Math.hypot(dx,dz);
-  if(d<1.3&&(dx*dir.x+dz*dir.z)/d>.7){Object.assign(P,{state:'grab',st:0,held:r,knees:0,kn:0,face:Math.atan2(dx,dz)});Object.assign(r,{state:'grabbed',st:0,kx:0,kz:0});return true}}}
-function releaseGrab(){const r=P.held;P.held=null;P.grabCd=30;if(P.state==='grab')P.state='idle';if(r&&r.state==='grabbed'){r.state='walk';r.cd=15}}
-function updateGrab(dir){const r=P.held;if(P.kn>0)P.kn--;
-  if(!r||r.state!=='grabbed'||P.st>110)return releaseGrab(); // the robot breaks free
-  if(pressed('jump')){releaseGrab();r.stun=40;jump(new THREE.Vector3(Math.sin(P.face),0,Math.cos(P.face)),5);return}
-  if(pressed('power')&&P.en>=POW_COST)return mindControl(r);
-  if(!pressed('attack'))return;
-  if(dir.lengthSq()){P.held=null;P.grabCd=30;P.state='throw';P.st=0;P.face=Math.atan2(dir.x,dir.z);r.state='walk';hurtRobot(r,12,dir.x,dir.z,12);play(H,ANIM.throw,{once:true,speed:1.6});shake=.25;return}
-  P.knees++;P.kn=10;play(H,ANIM.knee,{once:true,speed:2});
-  if(P.knees>=3){P.held=null;P.grabCd=30;P.state='idle';r.state='walk';hurtRobot(r,5,Math.sin(P.face),Math.cos(P.face),8)}else hurtRobot(r,5,0,0,0)}
-function mindControl(r){P.en-=POW_COST;P.held=null;P.grabCd=30;P.state='cast';P.st=0;play(H,ANIM.cast,{once:true,speed:1.4});
-  Object.assign(r,{state:'walk',ally:480,cd:20,st:0});unflash(r);bolt(P.x,1.8,P.z,r.x,1.8,r.z,'#c6f',.3);glow.position.set(r.x,2,r.z);glow.intensity=20}
-function jump(dir,boost=0){Object.assign(P,{state:'jump',st:0,vy:11,y:.01,ja:0,at:99,jvx:dir.x*boost,jvz:dir.z*boost})}
-function startAtk(i){P.combo=i;P.state='atk';P.st=0;P.hits.clear();P.buf=false;P.hold=0;playAtk()}
-// power-up form (hold H at full gauge for 1 s): aura, harder hits that chain, static zaps
-function startForm(){Object.assign(P,{pow:600,en:0,state:'idle',st:0,inv:Math.max(P.inv,40)});shake=.4;glow.position.set(P.x,2,P.z);glow.intensity=50}
-function handArc(name){const a=H.bone(name).getWorldPosition(new THREE.Vector3()),pts=[a];for(let i=1;i<=3;i++)pts.push(a.clone().add(new THREE.Vector3(rand(-.25,.25),rand(-.25,.25),rand(-.25,.25))));
-  const m=new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts,false,'catmullrom',0),8,.015,4),arcMat);m.userData={life:.06,max:.06};scene.add(m);fx.push(m)}
-const shield=new THREE.Mesh(new THREE.CircleGeometry(.75,28),new THREE.MeshBasicMaterial({color:CYAN,transparent:true,opacity:.35,side:THREE.DoubleSide,depthWrite:false}));
-shield.material.userData.outlineParameters={visible:false};shield.visible=false;scene.add(shield);
-
-/* ---------- update ---------- */
-let shake=0,over=false,T=0,zone=0,cleared=-1,fighting=false,msgT=0;const UB=[ZONES[0].u0+.6,ZONES[0].u1-.6];
-// keep a body inside the open part of the level (the locked zone during a fight)
-function keep(o){let [u,w]=toUW(o.x,o.z);u=clamp(u,UB[0],UB[1]);w=clamp(w,-WD,WD);[o.x,o.z]=fromUW(u,w)}
-const msgEl=document.getElementById('msg');function msg(h,s=''){msgEl.innerHTML=h?`<h1>${h}</h1><div>${s}</div>`:''}
-function updatePlayer(){T++;
-  if(P.inv>0&&--P.inv===0)flash(H,'#000000');if(P.inv===30)flash(H,'#000000');
-  if(P.state==='dead'){if(pressed('attack')||keys.enter)location.reload();return}
-  const dx=(held('right')?1:0)-(held('left')?1:0),dz=(held('down')?1:0)-(held('up')?1:0);
-  const dir=new THREE.Vector3().addScaledVector(RIGHT,dx).addScaledVector(UP,-dz);if(dir.lengthSq())dir.normalize();
-  const spd=P.pow>0?7.2:6,face=()=>{if(dir.lengthSq())P.face=Math.atan2(dir.x,dir.z)};
-  P.st++;if(P.grabCd>0)P.grabCd--;if(P.invis>0&&--P.invis===0)setInvis(0);
-  if(P.kx){P.x+=P.kx*DT;P.z+=P.kz*DT;P.kx*=.85;P.kz*=.85;if(Math.abs(P.kx)+Math.abs(P.kz)<.05)P.kx=P.kz=0}
-  if(P.y>0||P.vy){P.vy-=30*DT;P.x+=P.jvx*DT;P.z+=P.jvz*DT;P.y=Math.max(0,P.y+P.vy*DT);if(P.y===0&&P.vy<0){P.vy=0;P.jvx=P.jvz=0;if(P.state==='jump')P.state='idle'}}
-  const S=P.state;
-  if(S==='idle'||S==='walk'){
-    if(P.en>=50&&pressed('special'))return storm();
-    if(P.en>=50&&pressed('special2'))return zapFists();
-    if(pressed('power'))return power();
-    if(pressed('guard')){if(dir.lengthSq())return teleport(dir);P.state='guard';P.st=0;shield.material.color.set('#ffffff');return}
-    if(held('charge')){P.state='power';P.st=0;P.pf=0;return}
-    if(pressed('jump'))return jump(dir);
-    if(pressed('attack'))return startAtk(0);
-    for(const k of['left','right','up','down'])if(pressed(k)){if(P.tapK===k&&T-P.tapT<14){P.state='dash';P.st=0;return}P.tapK=k;P.tapT=T} // double tap: sprint
-    if(dir.lengthSq()){P.x+=dir.x*spd*DT;P.z+=dir.z*spd*DT;face();P.state='walk';if(!(P.grabCd>0)&&tryGrab(dir))return}else P.state='idle';
-  }else if(S==='dash'){
-    if(!dir.lengthSq()){P.state='idle';return}
-    if(pressed('attack')){P.state='datk';P.st=0;P.hits.clear();play(H,ANIM.datk,{once:true,speed:1.3});return}
-    if(pressed('jump'))return jump(dir,6);
-    if(pressed('guard'))return teleport(dir);
-    face();P.x+=dir.x*11*DT;P.z+=dir.z*11*DT;
-  }else if(S==='datk'){ // dash attack: flying strike that sends robots far
-    if(P.st<12){const v=(12-P.st*.6);P.x+=Math.sin(P.face)*v*DT;P.z+=Math.cos(P.face)*v*DT;hitRobots(2.2,12,10)}
-    if(P.st>=22)P.state='idle';
-  }else if(S==='jump'){
-    if(dir.lengthSq()){P.x+=dir.x*5*DT;P.z+=dir.z*5*DT;face()}
-    P.at++;if(pressed('attack')&&P.at>12&&P.ja<3){P.at=0;P.ja++;P.hits.clear();play(H,ANIM.air,{once:true,fade:.05,speed:1.8})} // up to 3 air attacks per jump
-    if(P.at>=3&&P.at<10)hitRobots(2,10,5);
-  }else if(S==='atk'){const a=COMBO[P.combo];if(pressed('attack'))P.buf=true;P.hold=held('attack')?P.hold+1:0;
-    if(P.combo===0&&P.hold>=12&&P.st>=a.hit+3){P.state='hold';P.st=0;P.ch=0;play(H,ANIM.hold,{once:true});return} // held past the first jab: charge up
-    if(P.combo===2&&P.st>=a.hit+3&&pressed('jump'))return jump(dir);
-    if(P.st<a.hit)P.x+=Math.sin(P.face)*2.5*DT,P.z+=Math.cos(P.face)*2.5*DT;
-    if(P.zap>0){if(P.st===a.hit)shootZap(a.dmg)}else if(P.st>=a.hit&&P.st<a.hit+3)hitRobots(a.reach,a.dmg,a.kb);
-    if(P.st>=a.len){if(P.buf&&P.combo<2)startAtk(P.combo+1);else{P.state='idle';P.buf=false}}
-  }else if(S==='hold'){face();
-    if(!held('attack')){if(P.ch>=CH_MIN){P.state='catk';P.st=0;P.full=P.ch>=CH_FULL;play(H,ANIM.catk,{once:true,speed:1.6})}else P.state='idle';return}
-    if(++P.ch===CH_FULL){glow.position.copy(H.bone('DEF-handR').getWorldPosition(new THREE.Vector3()));glow.intensity=25;shake=.1}
-    if(P.ch%Math.max(2,8-(P.ch/10|0))===0)handArc('DEF-handR');
-  }else if(S==='catk'){if(P.st===6)chainLightning(P.full?1.5:1);if(P.st>=26)P.state='idle';}
-  else if(S==='guard'){
-    if(!held('guard'))P.state='idle';
-    else if(dir.lengthSq()&&['left','right','up','down'].some(pressed))teleport(dir);
-    else if(P.st===11)shield.material.color.set(CYAN); // end of the parry window
-  }else if(S==='power'){ // hold H: fill the gauge, keep holding at full for the power-up
-    if(!held('charge')){P.state='idle';return}
-    if(P.en>=50&&pressed('special'))return storm();
-    if(P.en>=50&&pressed('special2'))return zapFists();
-    const was=P.en;P.en=Math.min(100,P.en+.4);
-    if(was<100&&P.en>=100){shake=.15;glow.position.set(P.x,1.5,P.z);glow.intensity=30}
-    if(P.en>=100&&!(P.pow>0)&&++P.pf>=60)return startForm();
-    if(P.st%5===0)aura();
-  }else if(S==='grab')updateGrab(dir);
-  else if(S==='throw'&&P.st>=16)P.state='idle';
-  else if(S==='cast'&&P.st>30)P.state='idle';
-  else if(S==='hit'&&P.st>18)P.state='idle';
-  keep(P);
-  if(P.pow>0){P.pow--;if(P.pow%3===0)aura();
-    if(P.pow%40===0){const r=nearestRobot(P.x,P.z,10);if(r){bolt(P.x,1.6,P.z,r.x,1.4,r.z,'#bff8ff',.2);hurtRobot(r,6,0,0,1,'x')}}} // static perk
-  if(P.zap>0&&--P.zap%6===0)handArc(P.zap%12?'DEF-handL':'DEF-handR');
-  document.getElementById('pow').textContent=[P.pow>0&&'⚡ POWER-UP',P.invis>0&&'INVISIBLE',P.zap>0&&'POINGS CHARGÉS',P.state==='power'&&P.en>=100&&!(P.pow>0)&&'transformation…'].filter(Boolean).join(' · ');
-  const LOOP={idle:ANIM.idle,walk:ANIM.walk,guard:ANIM.guard,power:ANIM.charge,dash:ANIM.dash};
-  if(LOOP[P.state])play(H,LOOP[P.state]);else if(P.state==='jump'&&P.at>=14)play(H,ANIM.jump);else if(P.state==='grab'&&!P.kn)play(H,ANIM.grab);
-}
-function playAtk(){const a=COMBO[P.combo],c=H.acts[ANIM.atk[P.combo]];play(H,ANIM.atk[P.combo],{once:true,fade:.06,speed:clamp(c.getClip().duration/(a.len*DT*1.4),.8,2.5)})}
-function updateRobots(){
-  for(const r of robots){const R=r.ch;r.st++;if(r.fl>0&&--r.fl===0)unflash(r);
-    if(r.state==='dead'){if(r.blow){r.x+=r.blow[0]*7*DT;r.z+=r.blow[1]*7*DT;R.root.position.y+=(r.blow[2]-r.st*.25)*DT}else if(r.st>70)R.root.position.y-=DT*1.5;continue}
-    if(r.boss){bossAI(r);continue}
-    if(r.state==='grabbed'){r.x=P.x+Math.sin(P.face)*1.1;r.z=P.z+Math.cos(P.face)*1.1;r.face=P.face+Math.PI;play(R,'Idle');continue}
-    if(r.kx||r.kz){r.x+=r.kx*DT;r.z+=r.kz*DT;r.kx*=.88;r.kz*=.88;if(Math.abs(r.kx)+Math.abs(r.kz)<.1)r.kx=r.kz=0}
-    if(r.state==='hit'){if(r.st>20){r.state='walk';play(R,'Walking')}continue}
-    if(r.stun>0){r.stun--;play(R,'Idle');if(r.stun%15===0)bolt(r.x-.3,1.8,r.z,r.x+.3,.6,r.z,'#bff8ff',.1);continue}
-    if(r.ally>0&&--r.ally===0){r.hp=0;r.state='dead';r.st=0;unflash(r);play(R,'Death',{once:true});continue} // control wears off: it collapses
-    // targets: controlled robots hunt the others; the rest hunt the player, or wander while he is invisible
-    const tgt=r.ally>0?nearestRobot(r.x,r.z,40,r):null,lost=!tgt&&P.invis>0;
-    if(lost&&(!r.wx||r.st%120===0)){r.wx=r.x+rand(-5,5);r.wz=r.z+rand(-4,4)}
-    if(r.ally>0&&!tgt){play(R,r.pris?'Dance':'Idle');continue}
-    const tx=tgt?tgt.x:lost?r.wx:P.x,tz=tgt?tgt.z:lost?r.wz:P.z,dx=tx-r.x,dz=tz-r.z,d=Math.hypot(dx,dz)||1;
-    if(r.state==='punch'){if(r.st===22&&d<2.2){if(tgt)hurtRobot(tgt,8,dx/d,dz/d,4,'x');else if(!lost&&P.y<1)hurtPlayer(r.dmg||8,dx/d,dz/d,r)}if(r.st>50){r.state='walk';r.cd=rand(50,100);play(R,'Walking')}continue}
-    r.face=Math.atan2(dx,dz);r.cd--;
-    if(P.hp<=0&&!tgt){play(R,'Dance');continue}
-    if(d>1.8){const v=lost?1.2:r.spd||2.6;r.x+=dx/d*v*DT;r.z+=dz/d*v*DT;play(R,'Walking')}else{play(R,'Idle');if(!lost&&r.cd<=0){r.state='punch';r.st=0;play(R,'Punch',{once:true})}}
-    for(const o of robots)if(o!==r&&o.hp>0&&o.state!=='grabbed'){const ox=r.x-o.x,oz=r.z-o.z,od=Math.hypot(ox,oz);if(od<1.4&&od>0){r.x+=ox/od*.03;r.z+=oz/od*.03}}
-    keep(r)}
-  for(let i=robots.length;i--;)if(robots[i].state==='dead'&&robots[i].st>160){scene.remove(robots[i].ch.root);robots.splice(i,1)}
-}
-function updateWaves(){if(msgT>0&&--msgT===0&&!over)msg('');
-  if(over||P.hp<=0)return;const Z=ZONES[zone];
-  if(fighting){if(robots.some(alive))return;fighting=false;cleared=zone;msg('ZONE SÉCURISÉE','→');msgT=90}
-  else{const n=cleared+1,N=ZONES[n];{if(N&&!N.seen&&toUW(P.x,P.z)[0]>N.u0+4){zone=n;N.seen=1;msg(N.name,N.hint);msgT=150;
-      for(let i=robots.length;i--;)if(robots[i].pris){scene.remove(robots[i].ch.root);robots.splice(i,1)}
-      document.getElementById('wave').textContent='ZONE '+(n+1)+'/'+ZONES.length;
-      fighting=true;if(N.boss)spawnBoss(...fromUW(N.u0+14,0));else for(const [u,w,k] of N.wave)spawnRobot(...fromUW(N.u0+u,w),k)}}}
-  const L=ZONES[zone];if(fighting){UB[0]=L.u0+.6;UB[1]=L.u1-.6}else{UB[0]=ZONES[0].u0+.6;UB[1]=ZONES[Math.min(cleared+1,ZONES.length-1)].u1-.6}
-  for(const g of gates)g.beams.visible=fighting?(g.u===L.u0||g.u===L.u1):g.u===ZONES[cleared+1]?.u1}
 /* ---------- street gadgets: breakable cans (heal), kickable barrels, puddles Thunderstruck electrifies, manhole steam ---------- */
-function fxMesh(geo,col,o,life,v,op=.8){const m=new THREE.Mesh(geo,noInk(new THREE.MeshBasicMaterial({color:col,transparent:true,opacity:op,depthWrite:false,side:THREE.DoubleSide})));
-  m.position.set(...o);m.userData={life,max:life,ng:1,v};scene.add(m);fx.push(m);return m}
-function kill(r){if(P.held===r)releaseGrab();r.hp=0;r.state='dead';r.st=0;r.ally=0;play(r.ch,'Death',{once:true})}
 const props=[],pickups=[],puddles=[],steamMat=noInk(new THREE.MeshBasicMaterial({color:'#c8d0e0',transparent:true,opacity:.3,depthWrite:false}));
 function addProp(kind,u,w){const [x,z]=fromUW(u,w),g=new THREE.Group(),cyl=(r,h,c,y)=>{const m=new THREE.Mesh(new THREE.CylinderGeometry(r,r*.9,h,16),toon(c));m.position.y=y;m.castShadow=true;g.add(m)};
   if(kind==='can'){cyl(.32,.85,'#7a8290',.43);cyl(.36,.08,'#5a616c',.88)}else{cyl(.4,1.1,'#c8401e',.55);cyl(.42,.08,'#2a2a2a',.25);cyl(.42,.08,'#2a2a2a',.85)}
@@ -444,20 +123,20 @@ function updateHazards(){
   for(let i=props.length;i--;){const p=props[i];if(!p.moving)continue;p.t++;p.x+=p.vx*DT;p.z+=p.vz*DT;p.g.position.set(p.x,0,p.z);p.g.rotation.y+=.3;
     const r=robots.find(r=>alive(r)&&Math.hypot(r.x-p.x,r.z-p.z)<1),[u,w]=toUW(p.x,p.z),out=u<UB[0]||u>UB[1]||Math.abs(w)>WD+.3;
     if(r)hurtRobot(r,22,p.vx/12,p.vz/12,9,'x');
-    if(r||out||p.t>80){props.splice(i,1);scene.remove(p.g);spark(p.x,.8,p.z,20,'#ff8a2a',7,.5);glow.position.set(p.x,1,p.z);glow.intensity=20;shake=.25}}
-  for(let i=pickups.length;i--;){const m=pickups[i];m.rotation.y+=.05;m.position.y=.4+Math.sin(T/10)*.1;
+    if(r||out||p.t>80){props.splice(i,1);scene.remove(p.g);spark(p.x,.8,p.z,20,'#ff8a2a',7,.5);glow.position.set(p.x,1,p.z);glow.intensity=20;G.shake=.25}}
+  for(let i=pickups.length;i--;){const m=pickups[i];m.rotation.y+=.05;m.position.y=.4+Math.sin(G.T/10)*.1;
     if(Math.hypot(P.x-m.position.x,P.z-m.position.z)<.9){P.hp=Math.min(100,P.hp+20);spark(m.position.x,.8,m.position.z,10,'#5ad15a');scene.remove(m);pickups.splice(i,1)}}
   for(const p of puddles)if(p.el>0){p.el--;p.m.material.color.set(p.el?(p.el%6<3?'#bff8ff':CYAN):'#34467a'); // electrified: zaps and stuns whoever stands in it (not Thunderstruck)
     if(p.el%12===0){for(const r of robots)if(alive(r)&&Math.hypot(r.x-p.x,r.z-p.z)<p.r){hurtRobot(r,4,0,0,0,'x');r.stun=Math.max(r.stun||0,40)}
       const a=rand(0,6.28);bolt(p.x+Math.cos(a)*p.r*.7,.05,p.z+Math.sin(a)*p.r*.7,p.x,.5,p.z,'#bff8ff',.12)}}
-  if(T%5===0)for(const [x,z] of STEAM){const m=new THREE.Mesh(new THREE.SphereGeometry(rand(.2,.4),8,6),steamMat);m.position.set(x+rand(-.2,.2),.1,z+rand(-.2,.2));
+  if(G.T%5===0)for(const [x,z] of STEAM){const m=new THREE.Mesh(new THREE.SphereGeometry(rand(.2,.4),8,6),steamMat);m.position.set(x+rand(-.2,.2),.1,z+rand(-.2,.2));
     m.userData={v:new THREE.Vector3(rand(-.2,.2),rand(1,1.6),rand(-.2,.2)),ng:1,life:1.6,max:1.6};scene.add(m);fx.push(m)}}
 
 /* ---------- boss: The Beast. Straight-line charges: dodge and he knocks himself out on the walls (x1.5 damage while dazed, x0.6 otherwise) ---------- */
 const BOSS_COL={charge:'#ff3020',punch:'#ffffff',pound:'#ffb020'},BEAST={jacket:'#b07a58',tee:'#b07a58',skin:'#b07a58',pants:'#3a3f52',boots:'#1e1a18',hair:'#1a1412'};
 function spawnBoss(x,z){const R=makeChar(ual,2.6/HEADY,()=>'#ffffff');dress(R,BEAST);bulk(R,1.55);
   const r={ch:R,x,z,face:-Math.PI*.75,hp:320,max:320,boss:1,base:'#000000',state:'idle',st:0,cd:80,kx:0,kz:0};R.root.position.set(x,0,z);play(R,'Idle_Loop');robots.push(r);return r}
-function bossDown(r){r.state='down';r.st=0;over=true;play(r.ch,'Death01',{once:true});r.base='#000000';flash(r.ch,'#000000');shake=.5;for(const o of robots)if(o!==r&&alive(o))kill(o);
+function bossDown(r){r.state='down';r.st=0;G.over=true;play(r.ch,'Death01',{once:true});r.base='#000000';flash(r.ch,'#000000');G.shake=.5;for(const o of robots)if(o!==r&&alive(o))kill(o);
   msg('THE BEAST EST K.O.','La rue est libre… pour l’instant · Entrée pour rejouer')}
 function endAtk(r){r.state='idle';r.st=0;r.cd=rand(50,90)*(r.p2?.7:1);unflash(r);r.ch.root.position.y=0}
 function bossAI(r){const R=r.ch,S=r.state;if(S==='down')return;
@@ -472,8 +151,8 @@ function bossAI(r){const R=r.ch,S=r.state;if(S==='down')return;
     if(r.cd<=0){const m=d<2.8?(Math.random()<.65?'punch':'pound'):d<5&&Math.random()<.3?'pound':'charge';Object.assign(r,{state:m,st:0,hit:0,bounce:0});flash(R,BOSS_COL[m]);
       play(R,m==='punch'?'Punch_Cross':m==='charge'?'Crouch_Idle_Loop':'Jump_Start',{once:m!=='charge'})}}
   else if(S==='roar'){ // phase 2: smashes the warehouse front open, the arena grows
-    if(r.st===30){facadeG.visible=false;ZONES[3].u1=112;const [x,z]=fromUW(97,0);spark(x,2,z,40,'#9aa0aa',9,.9);shake=.6;R.root.scale.multiplyScalar(1.12);r.base='#4a0800';
-      msg('THE BEAST S’ENRAGE !','Il défonce l’entrepôt · ses charges rebondissent sur les murs');msgT=150}
+    if(r.st===30){facadeG.visible=false;ZONES[3].u1=112;const [x,z]=fromUW(97,0);spark(x,2,z,40,'#9aa0aa',9,.9);G.shake=.6;R.root.scale.multiplyScalar(1.12);r.base='#4a0800';
+      msg('THE BEAST S’ENRAGE !','Il défonce l’entrepôt · ses charges rebondissent sur les murs');G.msgT=150}
     if(r.st>=70)endAtk(r)}
   else if(S==='charge'){ // red line = his path; jump over him or step aside
     if(r.st<=5)r.face=Math.atan2(dx,dz);
@@ -481,7 +160,7 @@ function bossAI(r){const R=r.ch,S=r.state;if(S==='down')return;
     if(r.st===36)play(R,'Sprint_Loop');
     if(r.st>=36){const v=r.p2?17:14,x0=r.x+r.dx*v*DT,z0=r.z+r.dz*v*DT;r.x=x0;r.z=z0;keep(r);if(r.st%3===0)spark(r.x,.2,r.z,2,'#c8c0b0',3,.3);
       if(!r.hit&&Math.hypot(P.x-r.x,P.z-r.z)<1.6&&P.y<1.2){r.hit=1;hurtPlayer(18,r.dx,r.dz,r)}
-      if(Math.hypot(r.x-x0,r.z-z0)>.01){shake=.4;spark(r.x+r.dx*.8,1.5,r.z+r.dz*.8,16,'#ffffff',6,.5); // hit a wall
+      if(Math.hypot(r.x-x0,r.z-z0)>.01){G.shake=.4;spark(r.x+r.dx*.8,1.5,r.z+r.dz*.8,16,'#ffffff',6,.5); // hit a wall
         if(r.p2&&r.bounce<2){const [u0,w0]=toUW(x0,z0),[u,w]=toUW(r.x,r.z);let du=(r.dx-r.dz)/S2,dw=(r.dx+r.dz)/S2;if(Math.abs(u-u0)>.005)du=-du;if(Math.abs(w-w0)>.005)dw=-dw;
           r.bounce++;r.hit=0;r.dx=(du+dw)/S2;r.dz=(dw-du)/S2;r.face=Math.atan2(r.dx,r.dz)}
         else{r.state='stunned';r.st=0;unflash(r);play(R,'Hit_Head',{once:true})}}
@@ -491,29 +170,12 @@ function bossAI(r){const R=r.ch,S=r.state;if(S==='down')return;
   else if(S==='punch'){r.face=Math.atan2(dx,dz);if(r.st===18&&d<3)hurtPlayer(14,dx/d,dz/d,r);if(r.st>=42)endAtk(r)}
   else if(S==='pound'){ // hop and shockwave ring: jump over it
     R.root.position.y=r.st<24?Math.sin(r.st/24*Math.PI)*1.6:0;
-    if(r.st===24){play(R,'Jump_Land',{once:true});shake=.5;fxMesh(new THREE.RingGeometry(2.9,3.3,48),'#ffb020',[r.x,.06,r.z],.4,null,.85).rotation.x=-Math.PI/2;spark(r.x,.3,r.z,16,'#c8c0b0',6,.5);
+    if(r.st===24){play(R,'Jump_Land',{once:true});G.shake=.5;fxMesh(new THREE.RingGeometry(2.9,3.3,48),'#ffb020',[r.x,.06,r.z],.4,null,.85).rotation.x=-Math.PI/2;spark(r.x,.3,r.z,16,'#c8c0b0',6,.5);
       if(d<3.3&&P.y<.4)hurtPlayer(12,dx/d,dz/d,null)}
     if(r.st>=50)endAtk(r)}
   keep(r)}
 
-function step(){
-  pollInput();if(pressed('back'))location.href='../index.html';
-  if(over&&keys.enter)location.reload();
-  updatePlayer();updateRobots();updateWaves();updateHazards();updateFx();updateProj();
-  {const B=robots.find(r=>r.boss),el=document.getElementById('boss');el.style.display=B&&B.hp>0?'block':'none';if(B)el.querySelector('i').style.width=Math.max(0,B.hp/B.max*100)+'%'}
-  shield.visible=P.state==='guard';shield.position.set(P.x+Math.sin(P.face)*.7,1.2,P.z+Math.cos(P.face)*.7);shield.rotation.y=P.face;
-  H.mixer.update(DT);for(const r of robots)r.ch.mixer.update(DT);
-  H.root.position.set(P.x,P.y,P.z);H.root.rotation.y=P.face;H.root.visible=!(P.inv>0&&P.inv<30&&(P.inv>>2)%2);
-  for(const r of robots){r.ch.root.position.x=r.x;r.ch.root.position.z=r.z;r.ch.root.rotation.y=r.face}
-  animDecor(performance.now());
-  document.querySelector('#hp i').style.width=Math.max(0,P.hp)+'%';const en=document.querySelector('#en i');en.style.width=P.en+'%';en.style.background=P.en>=50?'#9df':'#58a';
-}
-let acc=0,last=performance.now();
-function placeCam(){const [tx,tz]=fromUW(toUW(P.x,P.z)[0],-1.4),tgt=new THREE.Vector3(tx,1.4,tz); // beat em up camera: follows along the level, fixed depth
-  cam.position.copy(tgt).add(CAM_OFF);if(shake>0){cam.position.x+=rand(-shake,shake);cam.position.y+=rand(-shake,shake);shake=Math.max(0,shake-DT)}
-  cam.lookAt(tgt);sun.position.set(P.x+8,20,P.z+6);sun.target.position.set(P.x,0,P.z)}
-function frame(now){acc+=Math.min(.1,(now-last)/1000);last=now;while(acc>=DT){step();acc-=DT}placeCam();outline.render(scene,cam);requestAnimationFrame(frame)}
-requestAnimationFrame(frame);
-window.__v2={P,H,robots,step,spawnRobot,spawnBoss,props,puddles,get zone(){return zone},ZONES,fromUW,toUW,render:()=>{placeCam();outline.render(scene,cam)},cam}; // test hook
+start({ZONES,gates,spawn:spawnRobot,spawnBoss,bossAI,bossDown,BOSS_COL,bossName:'THE BEAST',bossColor:['#ff6a50','#e0301a'],
+  bossDmg:r=>r.state==='stunned'?1.5:.6,onLightning:r=>zapPuddles(r.x,r.z),onStrike:hitProps,update:t=>{updateHazards();animDecor(t)}});
 </script>
 </body></html>
