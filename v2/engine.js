@@ -3,6 +3,10 @@
 // Usage, in a level page module: const E=await MBEngine({THREE,GLTFLoader,SkeletonUtils,OutlineEffect}); build the level with E.*; E.start({...}).
 window.MBEngine=async function({THREE,GLTFLoader,SkeletonUtils,OutlineEffect}){
 document.head.insertAdjacentHTML('beforeend','<style>'+"\n  html,body{margin:0;height:100%;overflow:hidden;background:#1a2350;font-family:system-ui,sans-serif;color:#fff;user-select:none}\n  canvas{display:block}\n  #hud{position:fixed;left:16px;top:12px;width:260px;pointer-events:none;text-shadow:0 1px 2px #000}\n  #hud b{font-size:18px;letter-spacing:1px;color:#9df}\n  .bar{height:12px;background:#300;border:2px solid #000;margin-top:4px}.bar i{display:block;height:100%;background:#3d3;transition:width .1s}\n  #en{height:7px}#en i{background:#58a}\n  #wave{position:fixed;right:16px;top:12px;text-align:right;font-weight:bold;text-shadow:0 1px 2px #000}\n  #msg{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;text-align:center;pointer-events:none;text-shadow:0 2px 4px #000}\n  #msg h1{margin:0;font-size:clamp(28px,6vw,56px);color:#ffe14d}\n  #help{position:fixed;left:0;right:0;bottom:8px;text-align:center;font-size:12px;color:#ccd;text-shadow:0 1px 2px #000;pointer-events:none;padding:0 16px}\n  #back{position:fixed;right:16px;bottom:8px;color:#aab;font-size:12px}\n  #touch{position:fixed;inset:0;pointer-events:none;display:none;-webkit-user-select:none;-webkit-touch-callout:none}\n  #touch div{pointer-events:auto;touch-action:none;position:absolute;border-radius:50%;background:rgba(255,255,255,.12);border:2px solid rgba(255,255,255,.35);\n    color:rgba(255,255,255,.85);font:bold 11px system-ui,sans-serif;display:flex;align-items:center;justify-content:center;width:58px;height:58px}\n  #touch div:active{background:rgba(255,255,255,.3)}\n  body.touch #help,body.touch #back{display:none}\n  #load{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;font-size:18px;background:#0a0820}\n"+'</style>');
+document.body.insertAdjacentHTML('afterbegin','<div id="fade" style="position:fixed;inset:0;background:#000;opacity:0;pointer-events:none"></div><div id="bars" style="position:fixed;inset:0;pointer-events:none;display:none;border-top:11vh solid #000;border-bottom:11vh solid #000"></div>'+
+  '<div id="say" style="position:fixed;left:50%;bottom:13vh;transform:translateX(-50%);width:min(720px,92vw);text-align:center;font-size:clamp(15px,2.4vw,20px);text-shadow:0 2px 4px #000;pointer-events:none"></div>'+
+  '<div id="skip" style="position:fixed;right:16px;bottom:3vh;font-size:12px;color:#889;display:none">J / Entrée / toucher : passer</div>');
+document.head.insertAdjacentHTML('beforeend','<style>body.cine #hud,body.cine #wave,body.cine #help,body.cine #back,body.cine #touch,body.cine #boss{display:none!important}body.cine #skip,body.cine #bars{display:block!important}</style>');
 document.body.insertAdjacentHTML('afterbegin',"<div id=\"hud\"><b>THUNDERSTRUCK</b> <span id=\"pow\" style=\"color:#3ef0ff;font-weight:bold\"></span><div class=\"bar\" id=\"hp\"><i style=\"width:100%\"></i></div><div class=\"bar\" id=\"en\"><i style=\"width:0\"></i></div></div>\n<div id=\"boss\" style=\"position:fixed;left:50%;top:12px;width:min(320px,60vw);transform:translateX(-50%);display:none;text-align:center;text-shadow:0 1px 2px #000\"><b style=\"letter-spacing:2px\"></b><div class=\"bar\"><i style=\"width:100%\"></i></div></div><div id=\"wave\"></div><div id=\"msg\"></div>\n<div id=\"help\">ZQSD/flèches : bouger (2× : sprint) · J : frapper (maintenir : coup chargé) · K/Espace : sauter · L : tempête · M : poings chargés · H maintenu : charger l'énergie (pleine + 1 s : power-up) · G : invisible · F/Maj : garde (+direction : téléport) · contre un robot : saisie (J, J+dir, K, G) · manette OK · Échap : menu</div>\n<div id=\"touch\"><!-- shown on first touch; each button holds the keyboard key of BIND -->\n  <div id=\"stick\" style=\"left:18px;bottom:18px;width:130px;height:130px\">◀ ▲ ▼ ▶</div>\n  <div data-k=\"j\" style=\"right:84px;bottom:16px;width:66px;height:66px\">FRAPPE</div>\n  <div data-k=\"k\" style=\"right:14px;bottom:66px\">SAUT</div>\n  <div data-k=\"f\" style=\"right:160px;bottom:16px\">GARDE</div>\n  <div data-k=\"l\" style=\"right:160px;bottom:88px\">TEMPÊTE</div>\n  <div data-k=\"m\" style=\"right:88px;bottom:94px\">POINGS</div>\n  <div data-k=\"h\" style=\"right:14px;bottom:138px\">CHARGE</div>\n  <div data-k=\"g\" style=\"right:88px;bottom:166px\">INVISIBLE</div>\n  <div data-k=\"escape\" style=\"right:16px;top:40px;width:60px;height:30px;border-radius:8px\">MENU</div>\n</div>\n<a id=\"back\" href=\"../index.html\">← Menu</a>\n");
 // V2 prototype: same game ideas as V1 (x = right, z = depth, y = up), rendered in 3D with toon shading + outlines, isometric camera.
 
@@ -112,7 +116,7 @@ const pressed=a=>pressedNow[a];
   stick.addEventListener('pointerdown',e=>{e.preventDefault();stick.setPointerCapture(e.pointerId);const r=stick.getBoundingClientRect();sx=r.left+r.width/2;sy=r.top+r.height/2;moveStick(e)});
   stick.addEventListener('pointermove',e=>{if(e.buttons||e.pointerType==='touch')moveStick(e)});
   for(const ev of['pointerup','pointercancel'])stick.addEventListener(ev,()=>{for(const k of['arrowleft','arrowright','arrowup','arrowdown'])vkey(k,false)});
-  renderer.domElement.addEventListener('pointerdown',e=>{if(e.pointerType!=='mouse'&&(G.over||P.hp<=0))location.reload()})} // tap to replay
+  renderer.domElement.addEventListener('pointerdown',e=>{if(G.cine)G.cine.skip=1;else if(e.pointerType!=='mouse'&&(G.over||P.hp<=0))location.reload()})} // tap: skip cutscene / replay
 // screen-relative directions for the isometric camera
 const RIGHT=new THREE.Vector3(1,0,-1).normalize(),UP=new THREE.Vector3(-1,0,-1).normalize();
 
@@ -321,7 +325,7 @@ function updateEproj(){for(let i=eproj.length;i--;){const p=eproj[i],m=p.m;m.pos
 function step(){
   pollInput();if(pressed('back'))location.href='../index.html';
   if(G.over&&keys.enter)location.reload();
-  updatePlayer();updateRobots();updateWaves();L.update(performance.now());updateFx();updateProj();updateEproj();
+  if(G.cine)updateCine();else{updatePlayer();updateRobots();updateWaves()}L.update(performance.now());updateFx();updateProj();updateEproj();
   {const B=robots.find(r=>r.boss),el=document.getElementById('boss');el.style.display=B&&B.hp>0?'block':'none';if(B)el.querySelector('i').style.width=Math.max(0,B.hp/B.max*100)+'%'}
   shield.visible=P.state==='guard';shield.position.set(P.x+Math.sin(P.face)*.7,1.2,P.z+Math.cos(P.face)*.7);shield.rotation.y=P.face;
   H.mixer.update(DT);for(const r of robots)r.ch.mixer.update(DT);
@@ -329,16 +333,23 @@ function step(){
   for(const r of robots){r.ch.root.position.x=r.x;r.ch.root.position.z=r.z;r.ch.root.rotation.y=r.face}
   document.querySelector('#hp i').style.width=Math.max(0,P.hp)+'%';const en=document.querySelector('#en i');en.style.width=P.en+'%';en.style.background=P.en>=50?'#9df':'#58a';
 }
+/* ---------- cutscenes: {len, u(t) run each frame, end() cleanup, camU camera position}; the level script moves P, H and its actors ---------- */
+const sayEl=document.getElementById('say'),fadeEl=document.getElementById('fade');
+function say(who='',text='',col='#ffe14d'){sayEl.innerHTML=text?(who?'<b style="color:'+col+'">'+who+'</b><br>':'<i>')+text+(who?'':'</i>'):''}
+const fade=v=>{fadeEl.style.opacity=clamp(v,0,1)};
+function startCine(c){G.cine={t:0,...c};document.body.classList.add('cine')}
+function endCine(){const c=G.cine;G.cine=null;c.end?.();say();fade(0);msg('');document.body.classList.remove('cine')}
+function updateCine(){const c=G.cine;if(c.t>20&&(c.skip||pressed('attack')||pressed('jump')||keys.enter))return endCine();c.u(++c.t);if(c.t>=c.len)endCine()}
 let acc=0,last=performance.now();
-function placeCam(){const [tx,tz]=fromUW(toUW(P.x,P.z)[0],-1.4),tgt=new THREE.Vector3(tx,1.4,tz); // beat em up camera: follows along the level, fixed depth
+function placeCam(){const [tx,tz]=fromUW(G.cine?.camU??toUW(P.x,P.z)[0],-1.4),tgt=new THREE.Vector3(tx,1.4,tz); // beat em up camera: follows along the level, fixed depth
   cam.position.copy(tgt).add(CAM_OFF);if(G.shake>0){cam.position.x+=rand(-G.shake,G.shake);cam.position.y+=rand(-G.shake,G.shake);G.shake=Math.max(0,G.shake-DT)}
   cam.lookAt(tgt);sun.position.set(P.x+8,20,P.z+6);sun.target.position.set(P.x,0,P.z)}
 function frame(now){acc+=Math.min(.1,(now-last)/1000);last=now;while(acc>=DT){step();acc-=DT}placeCam();outline.render(scene,cam);requestAnimationFrame(frame)}
 // level: {ZONES, gates, spawn(x,z,kind), spawnBoss(x,z), bossAI(r), bossDown(r), BOSS_COL, update(t), bossName, bossColor:[label,bar]}
-// optional hooks: bossDmg(r) damage factor, onLightning(r), onStrike(reach,fx,fz), onKnock(r) -> true if it killed r
-function start(level){L=level;ZONES=L.ZONES;UB[0]=ZONES[0].u0+.6;UB[1]=ZONES[0].u1-.6;
+// optional: intro cutscene (see startCine); hooks bossDmg(r) damage factor, onLightning(r), onStrike(reach,fx,fz), onKnock(r) -> true if it killed r
+function start(level){L=level;if(L.intro)startCine(L.intro);ZONES=L.ZONES;UB[0]=ZONES[0].u0+.6;UB[1]=ZONES[0].u1-.6;
   const b=document.querySelector('#boss b');b.textContent=L.bossName;b.style.color=L.bossColor[0];document.querySelector('#boss i').style.background=L.bossColor[1];
   requestAnimationFrame(frame);window.__v2={P,H,robots,step,G,ZONES,fromUW,toUW,render:()=>{placeCam();outline.render(scene,cam)},cam,L}} // test hook
 return {DT,rand,clamp,renderer,scene,hemi,sun,toon,S2,toUW,fromUW,WD,LV,noInk,glowM,fieldM,lb,lc,ual,HEADY,makeChar,play,flash,CYAN,P,H,robots,fx,spark,bolt,glow,fxMesh,kill,
-  hurtRobot,hurtPlayer,releaseGrab,alive,nearestRobot,unflash,keep,msg,pressed,G,UB,eshot,eproj,start};
+  hurtRobot,hurtPlayer,releaseGrab,alive,nearestRobot,unflash,keep,msg,pressed,G,UB,eshot,eproj,start,aura,handArc,say,fade,startCine};
 };

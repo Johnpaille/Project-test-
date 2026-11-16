@@ -12,7 +12,7 @@ import * as THREE from 'three';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 import {OutlineEffect} from 'three/addons/effects/OutlineEffect.js';
-const {DT,rand,scene,hemi,sun,toon,S2,toUW,fromUW,WD,LV,noInk,glowM,fieldM,lb,lc,ual,HEADY,makeChar,play,flash,CYAN,P,H,robots,fx,spark,bolt,glow,fxMesh,kill,hurtRobot,hurtPlayer,alive,unflash,keep,msg,G,UB,start}=await MBEngine({THREE,GLTFLoader,SkeletonUtils,OutlineEffect});
+const {DT,rand,scene,hemi,sun,toon,S2,toUW,fromUW,WD,LV,noInk,glowM,fieldM,lb,lc,ual,HEADY,makeChar,play,flash,CYAN,P,H,robots,fx,spark,bolt,glow,fxMesh,kill,hurtRobot,hurtPlayer,alive,unflash,keep,msg,G,UB,start,aura,handArc,say,fade}=await MBEngine({THREE,GLTFLoader,SkeletonUtils,OutlineEffect});
 
 // night: darker sky and moonlight
 scene.background.set('#0b1030');scene.fog.color.set('#0b1030');scene.fog.near=50;scene.fog.far=100;hemi.color.set('#7a88d8');hemi.groundColor.set('#1a1430');hemi.intensity=.9;sun.color.set('#b8c8ff');sun.intensity=1.3;
@@ -175,7 +175,41 @@ function bossAI(r){const R=r.ch,S=r.state;if(S==='down')return;
     if(r.st>=50)endAtk(r)}
   keep(r)}
 
-start({ZONES,gates,spawn:spawnRobot,spawnBoss,bossAI,bossDown,BOSS_COL,bossName:'THE BEAST',bossColor:['#ff6a50','#e0301a'],
+/* ---------- intro cutscene (from V1 start0): a meteor shower wakes the powers; days later The Beast's gang claims the street ---------- */
+const lerp=(a,b,k)=>a+(b-a)*Math.min(1,Math.max(0,k)),put=(o,u,w)=>{[o.x,o.z]=fromUW(u,w)},FACE_R=Math.PI*.75,FACE_L=-Math.PI/4;
+const METEORS=[[30,14,-3],[55,2,3.5],[75,19,1],[95,9,-4.2],[110,23,-2],[130,12,3]].map(([t,u,w])=>({t,u,w})).concat([{t:160,u:7.3,w:.6,hero:1}]);
+const crater=(x,z,r)=>{const m=new THREE.Mesh(new THREE.CircleGeometry(r,20),noInk(new THREE.MeshBasicMaterial({color:'#16181f'})));m.rotation.x=-Math.PI/2;m.position.set(x,.025,z);scene.add(m)};
+let cast=[];
+const intro={len:760,camU:8,
+  u(t){
+    if(t===1){put(P,6,0);P.face=FACE_R;play(H,'Idle_Loop')}
+    fade(t<40?1-t/40:t>=300&&t<340?(t-300)/40:t>=340&&t<400?1-(t-370)/30:t>=730?(t-730)/30:0);
+    // part 1: meteors, then the one that falls next to the hero
+    for(const m of METEORS){const k=(t-m.t+40)/40;if(k<0||k>1&&m.done)continue;
+      const [x1,z1]=fromUW(m.u,m.w),[x0,z0]=fromUW(m.u-9,m.w-5),col=m.hero?CYAN:'#ffb040';
+      if(!m.mesh){m.mesh=new THREE.Mesh(new THREE.SphereGeometry(m.hero?.4:.3,10,8),glowM(m.hero?'#bff8ff':'#ffd27a'));scene.add(m.mesh)}
+      if(k<1){m.mesh.position.set(x0+(x1-x0)*k,24*(1-k)+.3,z0+(z1-z0)*k);spark(m.mesh.position.x,m.mesh.position.y,m.mesh.position.z,2,col,1,.35)}
+      else{m.done=1;scene.remove(m.mesh);spark(x1,.5,z1,m.hero?40:24,col,7,.6);crater(x1,z1,m.hero?.9:1.2);glow.position.set(x1,1.5,z1);glow.intensity=m.hero?60:30;G.shake=m.hero?.6:.35}}
+    if(t===20)say('','Une nuit, une pluie de météorites s’abattit sur Steel City…');
+    if(t===160)play(H,'Hit_Chest',{once:true});if(t===180)play(H,'Crouch_Idle_Loop');
+    if(t>=180&&t<300&&t%3===0)aura();
+    if(t===210)say('','… et éveilla d’étranges pouvoirs chez certains.');
+    if(t===250){play(H,'Spell_Simple_Enter',{once:true});G.shake=.2}if(t===285)play(H,'Idle_Loop');
+    // part 2: days later
+    if(t===340){say();msg('Quelques jours plus tard…')}
+    if(t===375){msg('');this.camU=10;put(P,5,0);P.face=FACE_R;play(H,'Idle_Loop');
+      cast=[[spawnBoss(...fromUW(19,0)),19,0],[spawnRobot(...fromUW(18,-2.4),'v'),17.5,-2.4],[spawnRobot(...fromUW(18.5,2.4),'p'),18,2.4]].map(([r,u,w])=>({r,u,w}));
+      for(const c of cast){c.r.face=FACE_L;c.walk=c.r.boss?'Walk_Loop':'Walking';c.idle=c.r.boss?'Idle_Loop':'Idle'}}
+    if(t>=375&&t<470)for(const c of cast){put(c.r,lerp(c.u,c.u-7,(t-380)/85),c.w);play(c.r.ch,t<465?c.walk:c.idle)}
+    if(t===480)say('THE BEAST','Cette ville a de nouveaux maîtres : moi et ma bande. Dégage, le héros.','#ff6a50');
+    if(t===580){say('THUNDERSTRUCK','Ta bande ? On n’a pas reçu ces pouvoirs pour rien. Ça va faire des étincelles !',CYAN);play(H,'Punch_Enter',{once:true})}
+    if(t>=580&&t<660&&t%4===0)handArc(t%8?'DEF-handL':'DEF-handR');
+    if(t===650)play(cast[0].r.ch,'Punch_Cross',{once:true}); // the Beast slams his fist in his palm, then the gang charges
+    if(t===690){say();for(const c of cast){c.r.face=FACE_L;play(c.r.ch,c.walk)}}
+    if(t>690)for(const c of cast){const [u,w]=toUW(c.r.x,c.r.z);put(c.r,u-.06,w)}},
+  end(){for(const c of cast){scene.remove(c.r.ch.root);robots.splice(robots.indexOf(c.r),1)}cast=[];put(P,3,0);P.face=FACE_R;play(H,'Idle_Loop');G.shake=0}};
+
+start({intro,ZONES,gates,spawn:spawnRobot,spawnBoss,bossAI,bossDown,BOSS_COL,bossName:'THE BEAST',bossColor:['#ff6a50','#e0301a'],
   bossDmg:r=>r.state==='stunned'?1.5:.6,onLightning:r=>zapPuddles(r.x,r.z),onStrike:hitProps,update:t=>{updateHazards();animDecor(t)}});
 </script>
 </body></html>
